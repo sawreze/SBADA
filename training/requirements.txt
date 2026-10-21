@@ -1,0 +1,7 @@
+transformers>=4.56
+peft>=0.17
+bitsandbytes>=0.46
+accelerate>=1.10
+huggingface_hub>=0.34
+sentencepiece
+safetensors

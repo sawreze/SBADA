@@ -1,0 +1,32 @@
+name: sbada
+description: "스바다 - 사진을 찍으면 AI(Gemma)가 가격을 매겨 주는 물물교환 앱"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+# 10장 기준: Flutter SDK + http(dart.dev). 사진 촬영은 image_picker(flutter.dev),
+# 자동 로그인용 토큰 보관은 shared_preferences(flutter.dev). WebSocket 은 dart:io 내장 기능을 쓴다.
+# 지도는 카카오맵 JavaScript SDK 를 webview_flutter(flutter.dev) 로 띄운다(키는 서버 application-local.properties).
+# 알림 표시는 패키지 없이 Android NotificationManager 를 MethodChannel 로 직접 부른다(MainActivity.kt).
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  image_picker: ^1.1.2
+  shared_preferences: ^2.3.2
+  # 카카오맵(JavaScript SDK)을 앱 안에서 띄우는 WebView (flutter.dev 공식 패키지)
+  webview_flutter: ^4.10.0
+  # 카카오 로그인 SDK (카카오 공식, developers.kakao.com). 네이티브 앱 키는 android/local.properties(Git 제외)
+  kakao_flutter_sdk_user: ^2.0.1
+  # 웹(브라우저 테스트 화면) 빌드에서 브라우저 WebSocket 을 쓰기 위한 Dart 공식 패키지(이미 http 가 쓰던 것을 직접 사용)
+  web: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,58 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 서버 통신(REST·WebSocket): release 빌드에서도 필요하므로 main 에 둔다(10장 7.2) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ 알림 표시 권한(실행 중에 사용자에게 묻는다) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:label="스바다"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+        <!-- 카카오 네이티브 앱 키: build.gradle.kts 가 android/local.properties(Git 제외)에서 채운다. MainActivity 가 Dart 로 전달 -->
+        <meta-data
+            android:name="com.sbada.KAKAO_NATIVE_APP_KEY"
+            android:value="${kakaoNativeAppKey}" />
+        <!-- 카카오계정 로그인(브라우저) 후 앱으로 돌아오는 주소: kakao{네이티브앱키}://oauth -->
+        <activity
+            android:name="com.kakao.sdk.flutter.auth.AuthCodeHandlerActivity"
+            android:exported="true">
+            <intent-filter android:label="flutter_web_auth">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kakao${kakaoNativeAppKey}" android:host="oauth" />
+            </intent-filter>
+        </activity>
+    </application>
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- 사진 찍기(image_picker 가 카메라 앱을 연다) -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE"/>
+        </intent>
+    </queries>
+</manifest>

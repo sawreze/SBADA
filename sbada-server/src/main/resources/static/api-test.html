@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스바다 API 테스트</title>
+<!--
+  스바다 백엔드를 브라우저에서 눌러 보는 테스트 화면(개발 · 시연용).
+  주소: http://127.0.0.1:8097/api-test.html (폰 화면은 /test.html)   (서버가 같은 주소에서 내려 주므로 CORS 설정이 필요 없다)
+  기존 API 만 부른다: /api/health · /api/ai/status · /api/categories · /api/items · /api/items/{id}
+                     /api/auth/login · /api/feed · /api/me/items · /api/items/{id}/matches
+                     /api/exchanges · /api/notifications
+  로그인 토큰은 이 탭의 sessionStorage 에만 둔다(탭을 닫으면 사라짐).
+-->
+<style>
+  :root {
+    --bg: #111215; --card: #1A1C20; --fill: #22252B; --chip: #2B2E35; --line: #2A2D33;
+    --text: #F2F4F7; --text2: #B6BDC7; --text3: #8A919C;
+    --mint: #93E1B7; --mint-text: #93E1B7; --on-mint: #0D1F16; --mint-soft: #1D3A2D;
+    --red: #FF5A65;
+  }
+  :root[data-theme="light"] {
+    --bg: #FFFFFF; --card: #FFFFFF; --fill: #F2F4F6; --chip: #F0F2F5; --line: #E5E8EB;
+    --text: #191F28; --text2: #4E5968; --text3: #8B95A1;
+    --mint-text: #137A50; --mint-soft: #E2F6EB; --red: #F04452;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: 'Noto Sans KR', system-ui, -apple-system, 'Malgun Gothic', sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line);
+           padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  h1 { margin: 0 8px 0 0; font-size: 20px; font-weight: 800; }
+  .pill { padding: 4px 10px; border-radius: 999px; background: var(--chip); color: var(--text2); font-size: 12px; font-weight: 700; }
+  .pill.ok { background: var(--mint-soft); color: var(--mint-text); }
+  .pill.bad { background: rgba(255,90,101,.15); color: var(--red); }
+  .grow { flex: 1; }
+  button, select, input { font: inherit; }
+  .btn { height: 36px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: transparent;
+         color: var(--text); font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--mint); color: var(--on-mint); border: 0; font-weight: 800; }
+  .field { height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--fill); color: var(--text); }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px; }
+  .tabs, .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+  .tab, .chip { flex: none; height: 36px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--chip);
+                color: var(--text); font-weight: 600; cursor: pointer; }
+  .tab.on, .chip.on { background: var(--text); color: var(--bg); font-weight: 800; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+  .note { color: var(--text3); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; cursor: pointer;
+          display: flex; flex-direction: column; position: relative; }
+  .card:hover { border-color: var(--mint-text); }
+  .card img { width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--chip); display: block; }
+  .card .body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; }
+  .card .title { font-size: 15px; font-weight: 700; }
+  .card .meta { font-size: 12px; color: var(--text3); }
+  .card .price { font-size: 16px; font-weight: 800; }
+  .card .ring { position: absolute; top: 8px; right: 8px; background: rgba(17,18,21,.72); border-radius: 50%; }
+  .reasons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .reasons span { padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--text2); font-size: 11px; font-weight: 600; }
+  .reasons span:first-child { background: var(--mint-soft); color: var(--mint-text); font-weight: 700; }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .row { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .row b { font-weight: 700; }
+  .empty { padding: 40px; text-align: center; color: var(--text3); }
+  .err { padding: 14px; border-radius: 12px; background: rgba(255,90,101,.12); color: var(--red); margin: 12px 0; white-space: pre-wrap; }
+  dialog { border: 1px solid var(--line); border-radius: 20px; background: var(--card); color: var(--text); padding: 0;
+           width: min(560px, 94vw); max-height: 90vh; }
+  dialog::backdrop { background: rgba(0,0,0,.55); }
+  .dlg { padding: 18px; overflow: auto; max-height: 90vh; }
+  .dlg img { width: 100%; max-height: 320px; object-fit: contain; border-radius: 14px; background: var(--chip); }
+  .ai { margin-top: 12px; padding: 14px; border-radius: 16px; background: rgba(147,225,183,.10); border: 1px solid rgba(147,225,183,.35); }
+  .factor { display: grid; grid-template-columns: 110px 1fr 70px; gap: 8px; align-items: center; font-size: 13px; color: var(--text2); margin: 5px 0; }
+  .track { height: 6px; border-radius: 3px; background: rgba(147,225,183,.16); overflow: hidden; }
+  .track > i { display: block; height: 100%; width: 0; background: var(--mint-text); border-radius: 3px; transition: width .9s cubic-bezier(.22,1,.36,1); }
+  pre { margin: 0; padding: 12px; border-radius: 12px; background: var(--fill); color: var(--text2); font-size: 12px;
+        max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  textarea.field { height: 90px; padding: 8px 10px; width: 100%; }
+  @media (max-width: 520px) { .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>스바다 테스트</h1>
+  <span id="srv" class="pill">서버 확인 중…</span>
+  <span id="ai" class="pill">AI …</span>
+  <span id="cnt" class="pill">…</span>
+  <span class="grow"></span>
+  <span id="who" class="pill">로그인 안 함</span>
+  <select id="acct" class="field" title="시연 계정(로컬 전용)">
+    <option value="minji">민지 (minji)</option><option value="junho">준호 (junho)</option>
+    <option value="seoyeon">서연 (seoyeon)</option><option value="dohyun">도현 (dohyun)</option>
+  </select>
+  <input id="pw" class="field" type="password" placeholder="비밀번호" style="width:120px">
+  <button class="btn primary" id="loginBtn">로그인</button>
+  <button class="btn" id="logoutBtn">로그아웃</button>
+  <button class="btn" id="themeBtn" title="다크 / 화이트">☀️ / 🌙</button>
+</header>
+<main>
+  <div class="tabs" id="tabs"></div>
+  <div id="view"></div>
+</main>
+<dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const won = (n) => (n ?? 0).toLocaleString('ko-KR') + '원';
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const dong = (region) => (region || '').trim().split(' ').pop();
+let token = null, me = null;
+try { token = sessionStorage.getItem('sbada.test.token'); me = JSON.parse(sessionStorage.getItem('sbada.test.me') || 'null'); } catch (_) {}
+
+/** 모든 요청이 지나가는 곳: 토큰을 붙이고, 오류면 서버의 {code, message} 를 그대로 보여 준다 */
+async function api(method, path, body, auth = true) {
+  const headers = { Accept: 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (auth && token) headers.Authorization = 'Bearer ' + token;
+  const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await res.text();
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch (_) { json = text; }
+  if (!res.ok) {
+    const e = new Error(`${res.status} ${json?.code ?? ''} ${json?.message ?? text}`.trim());
+    e.status = res.status; e.body = json;
+    if (res.status === 401 && auth && token) setSession(null, null);
+    throw e;
+  }
+  return json;
+}
+
+function setSession(t, u) {
+  token = t; me = u;
+  try {
+    if (t) { sessionStorage.setItem('sbada.test.token', t); sessionStorage.setItem('sbada.test.me', JSON.stringify(u)); }
+    else { sessionStorage.removeItem('sbada.test.token'); sessionStorage.removeItem('sbada.test.me'); }
+  } catch (_) {}
+  $('#who').textContent = u ? `${u.nickname} (@${u.username}) 로그인` : '로그인 안 함';
+  $('#who').className = 'pill' + (u ? ' ok' : '');
+}
+
+/** 매칭 점수 링: 0 → 점수로 숫자가 올라가며 민트 호가 채워진다(앱 ScoreBadge 와 같은 모양) */
+function ring(score, size = 56) {
+  const r = size / 2 - size * 0.05, c = 2 * Math.PI * r, high = score >= 75;
+  const color = high ? 'var(--mint-text)' : 'var(--text2)';
+  const el = document.createElement('div');
+  el.className = 'ring';
+  el.style.cssText = `width:${size}px;height:${size}px;position:relative;flex:none`;
+  el.innerHTML = `<svg width="${size}" height="${size}" style="transform:rotate(-90deg)">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="rgba(147,225,183,.2)" stroke-width="${size * 0.1}"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${size * 0.1}"
+              stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c}"/></svg>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:${color};font-weight:800;font-size:${size * 0.3}px">
+      <span>0</span><small style="font-size:${size * 0.17}px">%</small></div>`;
+  const arc = el.querySelectorAll('circle')[1], num = el.querySelector('span');
+  const start = performance.now(), dur = 900;
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - t, 3), v = score * e;
+    arc.setAttribute('stroke-dashoffset', c * (1 - v / 100));
+    num.textContent = Math.round(v);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  return el;
+}
+
+function itemCard(item, rec) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.innerHTML = `<img loading="lazy" src="${esc(item.imageUrls?.[0] || '')}" alt="">
+    <div class="body">
+      <div class="title">${esc(item.title)}</div>
+      <div class="meta">${esc(dong(item.owner?.region))} · ${esc(item.owner?.nickname)} · ${esc(item.categoryLabel)} · ${esc(item.conditionLabel)}</div>
+      <div class="price">AI ${won(item.price)}</div>
+      ${rec ? `<div class="reasons">${rec.reasons.slice(0, 2).map((r) => `<span>${esc(r)}</span>`).join('')}</div>` : ''}
+    </div>`;
+  if (rec) {
+    const r = ring(rec.score, 52);
+    Object.assign(r.style, { position: 'absolute', top: '8px', right: '8px' }); // 사진 오른쪽 위
+    el.appendChild(r);
+  }
+  el.onclick = () => openItem(item.id, rec);
+  return el;
+}
+
+function showError(target, e) {
+  target.innerHTML = `<div class="err">${esc(e.message)}${e.status === 401 || e.status === 403 ? '\n→ 위에서 시연 계정으로 로그인해 주세요.' : ''}</div>`;
+}
+
+/* ─────────── 탭 ─────────── */
+const TABS = [
+  ['items', '전체 상품'], ['feed', 'AI 추천 피드 🔒'], ['mine', '내 물건 · 매칭 🔒'],
+  ['exchanges', '교환 요청 🔒'], ['noti', '알림 🔒'], ['raw', 'API 직접 호출'],
+];
+let tab = 'items', category = '', query = '';
+
+function renderTabs() {
+  $('#tabs').innerHTML = '';
+  for (const [k, label] of TABS) {
+    const b = document.createElement('button');
+    b.className = 'tab' + (tab === k ? ' on' : '');
+    b.textContent = label;
+    b.onclick = () => { tab = k; renderTabs(); show(); };
+    $('#tabs').appendChild(b);
+  }
+}
+
+async function show() {
+  const v = $('#view');
+  v.innerHTML = '<div class="empty">불러오는 중…</div>';
+  try {
+    if (tab === 'items') await showItems(v);
+    else if (tab === 'feed') await showFeed(v);
+    else if (tab === 'mine') await showMine(v);
+    else if (tab === 'exchanges') await showExchanges(v);
+    else if (tab === 'noti') await showNoti(v);
+    else showRaw(v);
+  } catch (e) { showError(v, e); }
+}
+
+let categories = [];
+async function showItems(v) {
+  if (!categories.length) categories = (await api('GET', '/api/categories', undefined, false)).categories;
+  const params = new URLSearchParams({ limit: '100' });
+  if (category) params.set('category', category);
+  if (query) params.set('q', query);
+  const { items } = await api('GET', '/api/items?' + params, undefined, false);
+  v.innerHTML = `<div class="bar"><input id="q" class="field" placeholder="이름으로 검색" value="${esc(query)}">
+      <button class="btn" id="qBtn">검색</button><span class="note">GET /api/items?${esc(params)} · ${items.length}개</span></div>
+    <div class="chips" id="cats"></div><div class="grid" id="grid"></div>`;
+  const cats = $('#cats');
+  for (const c of [{ code: '', label: '전체' }, ...categories]) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (category === c.code ? ' on' : '');
+    b.textContent = c.label;
+    b.onclick = () => { category = c.code; show(); };
+    cats.appendChild(b);
+  }
+  $('#qBtn').onclick = () => { query = $('#q').value.trim(); show(); };
+  $('#q').onkeydown = (e) => { if (e.key === 'Enter') $('#qBtn').click(); };
+  const grid = $('#grid');
+  if (!items.length) grid.outerHTML = '<div class="empty">조건에 맞는 물건이 없어요</div>';
+  items.forEach((it) => grid.appendChild(itemCard(it)));
+}
+
+async function showFeed(v) {
+  const feed = await api('GET', '/api/feed?limit=60');
+  v.innerHTML = `<p class="note">GET /api/feed · 후보 ${feed.candidates}개 · 선호도 40% + 가격 적합도 30% + 신선도 15% + 인기도 15% · 카드를 누르면 점수 계산</p><div class="grid" id="grid"></div>`;
+  feed.items.forEach((r) => $('#grid').appendChild(itemCard(r.item, r)));
+}
+
+async function showMine(v) {
+  const { items } = await api('GET', '/api/me/items');
+  v.innerHTML = `<p class="note">GET /api/me/items · 물건을 고르면 GET /api/items/{id}/matches (비슷한 가격대 매칭)</p>
+    <div class="chips" id="mineChips"></div><div id="matches"></div>`;
+  if (!items.length) { $('#matches').innerHTML = '<div class="empty">아직 올린 물건이 없어요</div>'; return; }
+  const pick = async (it, btn) => {
+    document.querySelectorAll('#mineChips .chip').forEach((b) => b.classList.remove('on'));
+    btn.classList.add('on');
+    const box = $('#matches');
+    box.innerHTML = '<div class="empty">매칭 계산 중…</div>';
+    try {
+      const m = await api('GET', `/api/items/${it.id}/matches?limit=50`);
+      box.innerHTML = `<p class="note">'${esc(it.title)}' (${won(it.price)}) 기준 후보 ${m.candidates}개 · 가격 40% + 내 취향 25% + 서로 원함 20% + 신선도 10% + 상태 5%</p><div class="grid" id="grid"></div>`;
+      if (!m.matches.length) $('#grid').outerHTML = '<div class="empty">가격대가 비슷한 물건이 아직 없어요</div>';
+      m.matches.forEach((r) => $('#grid').appendChild(itemCard(r.item, r)));
+    } catch (e) { showError(box, e); }
+  };
+  items.forEach((it, i) => {
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.textContent = `${it.title} · ${won(it.price)}`;
+    b.onclick = () => pick(it, b);
+    $('#mineChips').appendChild(b);
+    if (i === 0) pick(it, b);
+  });
+}
+
+async function showExchanges(v) {
+  const [rec, sent] = await Promise.all([api('GET', '/api/exchanges?box=received'), api('GET', '/api/exchanges?box=sent')]);
+  const row = (e) => `<div class="row"><b>${esc(e.requester.nickname)}</b>의 '${esc(e.offeredItem.title)}'(${won(e.offeredItem.price)})
+      ↔ <b>${esc(e.targetOwner.nickname)}</b>의 '${esc(e.targetItem.title)}'(${won(e.targetItem.price)})
+      · 가격 차이 ${e.priceDiffPercent > 0 ? '+' : ''}${e.priceDiffPercent}% · <span class="pill ${e.status === 'REQUESTED' ? 'ok' : ''}">${esc(e.status)}</span>
+      ${e.message ? `<div class="note" style="margin-top:6px">“${esc(e.message)}”</div>` : ''}</div>`;
+  v.innerHTML = `<p class="note">GET /api/exchanges?box=received · sent (수락·거절은 앱에서)</p>
+    <h3>받은 요청 ${rec.exchanges.length}건</h3><div class="list">${rec.exchanges.map(row).join('') || '<div class="empty">없어요</div>'}</div>
+    <h3>보낸 요청 ${sent.exchanges.length}건</h3><div class="list">${sent.exchanges.map(row).join('') || '<div class="empty">없어요</div>'}</div>`;
+}
+
+async function showNoti(v) {
+  const n = await api('GET', '/api/notifications');
+  v.innerHTML = `<p class="note">GET /api/notifications · 안 읽음 ${n.unread}개</p><div class="list">${
+    n.notifications.map((x) => `<div class="row" style="${x.read ? '' : 'border-color:var(--mint-text)'}"><b>${esc(x.title)}</b>
+      <div class="note" style="margin-top:4px">${esc(x.body)}</div><div class="note">${esc(x.type)} · ${esc(x.createdAt)}</div></div>`).join('')
+    || '<div class="empty">새 알림이 없어요</div>'}</div>`;
+}
+
+function showRaw(v) {
+  v.innerHTML = `<p class="note">아무 API 나 직접 불러 봅니다. 로그인했으면 토큰이 자동으로 붙어요.</p>
+    <div class="bar"><select id="m" class="field"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+      <input id="p" class="field" style="flex:1;min-width:220px" value="/api/health">
+      <button class="btn primary" id="send">보내기</button></div>
+    <textarea id="b" class="field" placeholder='본문(JSON, 선택) 예: {"username":"minji","password":"..."}'></textarea>
+    <p class="note" id="st"></p><pre id="out"></pre>`;
+  $('#send').onclick = async () => {
+    const m = $('#m').value, p = $('#p').value.trim(), raw = $('#b').value.trim();
+    let body;
+    try { body = raw ? JSON.parse(raw) : undefined; } catch (e) { $('#st').textContent = '본문이 JSON 형식이 아니에요.'; return; }
+    const t0 = performance.now();
+    try {
+      const res = await api(m, p, body);
+      $('#st').textContent = `성공 · ${Math.round(performance.now() - t0)}ms`;
+      $('#out').textContent = JSON.stringify(res, null, 2);
+    } catch (e) {
+      $('#st').textContent = `실패 · ${e.message}`;
+      $('#out').textContent = JSON.stringify(e.body, null, 2);
+    }
+  };
+}
+
+/* ─────────── 물건 상세(팝업) ─────────── */
+async function openItem(id, rec) {
+  const dlg = $('#dlg'), body = $('#dlgBody');
+  body.innerHTML = '<div class="empty">불러오는 중…</div>';
+  dlg.showModal();
+  try {
+    const it = await api('GET', `/api/items/${id}`);
+    body.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span class="note">GET /api/items/${id}</span><button class="btn" id="close">닫기</button></div>
+      <img src="${esc(it.imageUrls?.[0] || '')}" alt="">
+      <h2 style="margin:12px 0 4px">${esc(it.title)}</h2>
+      <div class="note">${esc(it.owner?.nickname)} · ${esc(it.owner?.region)} · ${esc(it.categoryLabel)} · ${esc(it.conditionLabel)} · 조회 ${it.viewCount} · 요청 ${it.requestCount}</div>
+      <div style="font-size:24px;font-weight:800;margin:8px 0">AI ${won(it.price)}</div>
+      <div id="score"></div>
+      <div class="ai"><div style="color:var(--mint-text);font-weight:700;font-size:13px">✦ ${it.aiProvider === 'seed' ? '시연용 표본 가격' : 'Gemma AI 가격 분석'}</div>
+        <div class="note" style="margin-top:6px">적정 범위 ${won(it.priceMin)} ~ ${won(it.priceMax)} · 신뢰도 ${Math.round(it.aiConfidence * 100)}%</div>
+        ${it.aiReason ? `<p style="margin:8px 0 0;color:var(--text2);font-size:14px">${esc(it.aiReason)}</p>` : ''}</div>
+      ${it.description ? `<p style="line-height:1.6">${esc(it.description)}</p>` : ''}
+      ${it.wishCategoryLabels?.length ? `<div class="reasons">${it.wishCategoryLabels.map((w) => `<span>${esc(w)}</span>`).join('')}</div>` : ''}`;
+    $('#close').onclick = () => dlg.close();
+    if (rec) {
+      const box = $('#score');
+      box.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0">
+          <b>매칭 점수 계산</b></div>${rec.factors.map((f) =>
+          `<div class="factor"><span>${esc(f.label)} ${Math.round(f.weight * 100)}%</span><div class="track"><i style="--w:${Math.round(f.value * 100)}%"></i></div><span>${Math.round(f.value * 100)} × ${Math.round(f.weight * 100)}%</span></div>`).join('')}`;
+      box.querySelector('div').appendChild(ring(rec.score, 64));
+      requestAnimationFrame(() => box.querySelectorAll('.track > i').forEach((bar, i) =>
+        setTimeout(() => { bar.style.width = bar.style.getPropertyValue('--w'); }, 120 * i)));
+    }
+  } catch (e) { showError(body, e); }
+}
+$('#dlg').addEventListener('click', (e) => { if (e.target.id === 'dlg') e.target.close(); });
+
+/* ─────────── 머리말: 서버 · AI 상태, 로그인 ─────────── */
+async function status() {
+  try {
+    const h = await api('GET', '/api/health', undefined, false);
+    $('#srv').textContent = '서버 UP'; $('#srv').className = 'pill ok';
+    $('#cnt').textContent = `계정 ${h.users} · 물건 ${h.items} · 실시간 접속 ${h.websocketOnlineUsers}`;
+    const ai = h.ai || {};
+    $('#ai').textContent = 'AI ' + (ai.active === 'google' ? 'Gemma(Google)' : ai.active === 'ollama' ? 'Gemma(Ollama)' : '기준가 추정');
+    $('#ai').className = 'pill ' + (ai.active === 'fallback' ? '' : 'ok');
+  } catch (e) {
+    $('#srv').textContent = '서버 연결 안 됨'; $('#srv').className = 'pill bad';
+  }
+}
+
+$('#loginBtn').onclick = async () => {
+  const username = $('#acct').value, password = $('#pw').value;
+  if (!password) { alert('비밀번호를 입력해 주세요.'); return; }
+  try {
+    const r = await api('POST', '/api/auth/login', { username, password }, false);
+    setSession(r.accessToken, r.user);
+    show();
+  } catch (e) { alert(e.message); }
+};
+$('#pw').onkeydown = (e) => { if (e.key === 'Enter') $('#loginBtn').click(); };
+$('#logoutBtn').onclick = () => { setSession(null, null); show(); };
+$('#themeBtn').onclick = () => {
+  const root = document.documentElement;
+  root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
+  try { localStorage.setItem('sbada.test.theme', root.dataset.theme); } catch (_) {}
+};
+try { const t = localStorage.getItem('sbada.test.theme'); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
+
+setSession(token, me);
+renderTabs();
+status();
+show();
+</script>
+</body>
+</html>

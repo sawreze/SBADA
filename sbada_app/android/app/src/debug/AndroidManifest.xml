@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 개발 중(debug)에만: Flutter 도구 연결, 로컬 서버 평문 HTTP 허용(10장 7.2) -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

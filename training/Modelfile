@@ -1,0 +1,7 @@
+# 스바다 전용 Gemma(QLoRA 학습본) — Ollama 등록용
+#   ollama create sbada-gemma -f training\Modelfile
+# 앞 단계에서 만든 GGUF 파일 경로(README 4번)
+FROM ./out/sbada-gemma-q4_k_m.gguf
+# JSON 답이 흔들리지 않게 낮은 온도
+PARAMETER temperature 0.2
+PARAMETER num_ctx 4096

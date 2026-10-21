@@ -1,0 +1,1721 @@
+{
+  "info": {
+    "_postman_id": "a0834963-d202-47ed-9581-bbd3e599096c",
+    "name": "스바다 백엔드 테스트",
+    "description": "스바다 서버(http://127.0.0.1:8097) 전체 API 자동 테스트.\n위에서부터 순서대로 실행해야 한다(앞 요청이 만든 토큰·번호를 뒤에서 씀). Collection Runner 로 한 번에 실행.\n시연 계정 minji / sbada1234 를 쓰고, 실행할 때마다 새 테스트 계정(pm…)을 만든다.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. 서버 상태 · 공개 API",
+      "item": [
+        {
+          "name": "서버 상태",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status = UP', () => pm.expect(pm.response.json().status).to.eql('UP'));",
+                  "pm.test('회원·물건 수가 숫자', () => { const j=pm.response.json(); pm.expect(j.users).to.be.a('number'); pm.expect(j.items).to.be.a('number'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "서버 첫 화면(HTML)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('HTML 에 스바다 제목', () => pm.expect(pm.response.text()).to.include('스바다'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            }
+          }
+        },
+        {
+          "name": "지도 설정(카카오 JS 키)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('provider = kakao', () => pm.expect(pm.response.json().provider).to.eql('kakao'));",
+                  "pm.test('지도 키 설정됨(configured=true)', () => pm.expect(pm.response.json().configured).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/config/map",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "config",
+                "map"
+              ]
+            }
+          }
+        },
+        {
+          "name": "AI 상태",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "console.log('AI 실제 사용:', pm.response.json().active);",
+                  "pm.test('active 값 있음', () => pm.expect(pm.response.json().active).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "카테고리 목록",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('카테고리 14개', () => pm.expect(pm.response.json().categories.length).to.eql(14));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. 회원가입 · 로그인 · 내 정보",
+      "item": [
+        {
+          "name": "회원가입(새 테스트 계정)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const u = 'pm' + Date.now().toString().slice(-9);",
+                  "pm.collectionVariables.set('testUser', u);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 201', () => pm.response.to.have.status(201));",
+                  "pm.test('비밀번호 해시는 응답에 없음', () => pm.expect(pm.response.text()).to.not.include('password'));",
+                  "pm.test('Location 헤더', () => pm.expect(pm.response.headers.get('Location')).to.include('/api/users/'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{testUser}}\",\n  \"password\": \"postman1234\",\n  \"nickname\": \"포스트맨\",\n  \"region\": \"마포구 망원동\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "회원가입 중복 아이디 → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 409', () => pm.response.to.have.status(409));",
+                  "pm.test('오류 코드 USERNAME_EXISTS', () => pm.expect(pm.response.json().code).to.eql('USERNAME_EXISTS'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{testUser}}\",\n  \"password\": \"postman1234\",\n  \"nickname\": \"포스트맨\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "회원가입 입력 오류 → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 400', () => pm.response.to.have.status(400));",
+                  "pm.test('오류 코드 VALIDATION_FAILED', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_FAILED'));",
+                  "pm.test('칸별 오류 안내(errors)', () => pm.expect(pm.response.json().errors).to.have.property('username'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"A!\",\n  \"password\": \"1\",\n  \"nickname\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "로그인 비밀번호 틀림 → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 401', () => pm.response.to.have.status(401));",
+                  "pm.test('오류 코드 LOGIN_FAILED', () => pm.expect(pm.response.json().code).to.eql('LOGIN_FAILED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{testUser}}\",\n  \"password\": \"wrong-password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "로그인(테스트 계정)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Bearer 토큰 발급', () => { pm.expect(j.tokenType).to.eql('Bearer'); pm.expect(j.accessToken.split('.').length).to.eql(3); });",
+                  "pm.collectionVariables.set('tokenNew', j.accessToken);",
+                  "pm.collectionVariables.set('newUserId', j.user.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{testUser}}\",\n  \"password\": \"postman1234\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "로그인(시연 계정 민지)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('민지 로그인', () => pm.expect(j.user.nickname).to.eql('민지'));",
+                  "pm.collectionVariables.set('tokenMinji', j.accessToken);",
+                  "pm.collectionVariables.set('minjiId', j.user.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"minji\",\n  \"password\": \"sbada1234\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "내 정보 — 토큰 없음 → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "내 정보 — 가짜 토큰 → 401",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('fakeToken', 'abc.def.ghi');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{fakeToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "내 정보(테스트 계정)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('아직 온보딩 전', () => pm.expect(pm.response.json().user.onboarded).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "온보딩 저장(관심 카테고리·가격대)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('온보딩 완료', () => pm.expect(pm.response.json().user.onboarded).to.eql(true));",
+                  "pm.test('선호도 저장됨', () => pm.expect(pm.response.json().preferences.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"wantedCategories\": [\n    \"DIGITAL\",\n    \"HOBBY\",\n    \"BOOK\"\n  ],\n  \"keywords\": [\n    \"닌텐도\",\n    \"레고\"\n  ],\n  \"priceMin\": 10000,\n  \"priceMax\": 200000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "카카오 로그인 — 가짜 토큰 → 401/503",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 401/503', () => pm.expect(pm.response.code).to.be.oneOf([401, 503]));",
+                  "pm.test('카카오 오류 코드', () => pm.expect(pm.response.json().code).to.be.oneOf(['KAKAO_TOKEN_INVALID','KAKAO_NOT_CONFIGURED','KAKAO_APP_MISMATCH']));",
+                  "console.log('카카오 로그인 응답:', pm.response.json().code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/kakao",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "kakao"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessToken\": \"not-a-real-kakao-token\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. 물건 조회 · 추천",
+      "item": [
+        {
+          "name": "물건 목록(공개)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "pm.test('물건이 1개 이상', () => pm.expect(items.length).to.be.above(0));",
+                  "const other = items.find(i => i.owner.id !== Number(pm.collectionVariables.get('minjiId')));",
+                  "pm.collectionVariables.set('anyItemId', items[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items"
+              ]
+            }
+          }
+        },
+        {
+          "name": "카테고리로 거르기(DIGITAL)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('모두 DIGITAL', () => pm.response.json().items.forEach(i => pm.expect(i.category).to.eql('DIGITAL')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items?category=DIGITAL",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "DIGITAL"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "물건 상세(공개)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('AI 가격 있음', () => pm.expect(pm.response.json().price).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{anyItemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{anyItemId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "없는 물건 → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 404', () => pm.response.to.have.status(404));",
+                  "pm.test('오류 코드 ITEM_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('ITEM_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/99999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "99999999"
+              ]
+            }
+          }
+        },
+        {
+          "name": "홈 추천 피드(테스트 계정)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const f = pm.response.json();",
+                  "pm.test('추천 점수 0~100', () => f.items.forEach(r => pm.expect(r.score).to.be.within(0,100)));",
+                  "pm.test('요소별 근거(factors) 있음', () => f.items.forEach(r => pm.expect(r.factors.length).to.be.above(0)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/feed?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "feed"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "내 물건(민지)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const mine = pm.response.json().items.filter(i => i.status === 'AVAILABLE');",
+                  "pm.test('민지 물건 있음', () => pm.expect(mine.length).to.be.above(0));",
+                  "pm.collectionVariables.set('minjiItemId', mine[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMinji}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "items"
+              ]
+            }
+          }
+        },
+        {
+          "name": "가격 매칭(민지 물건)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const m = pm.response.json();",
+                  "pm.test('기준 물건 = 민지 물건', () => pm.expect(m.base.id).to.eql(Number(pm.collectionVariables.get('minjiItemId'))));",
+                  "pm.test('후보는 0.5~2배 가격', () => m.matches.forEach(r => pm.expect(r.item.price).to.be.within(m.base.price/2 - 1, m.base.price*2 + 1)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMinji}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{minjiItemId}}/matches?limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{minjiItemId}}",
+                "matches"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "남의 물건 매칭 → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 403', () => pm.response.to.have.status(403));",
+                  "pm.test('오류 코드 NOT_OWNER', () => pm.expect(pm.response.json().code).to.eql('NOT_OWNER'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{minjiItemId}}/matches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{minjiItemId}}",
+                "matches"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. 물건 등록(사진 → AI 가격 → 등록)",
+      "item": [
+        {
+          "name": "사진 올리기",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('imageId', j.id);",
+                  "pm.test('사진 주소', () => pm.expect(j.url).to.include('/api/images/'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/images",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "images"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "C:/dev/projects/sbada/postman/test-item.jpg"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "AI 가격 분석(Gemma, 최대 1~2분)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const a = pm.response.json();",
+                  "console.log('AI:', a.provider, a.model, a.price + '원', a.latencyMs + 'ms');",
+                  "pm.test('가격 > 0, 범위 안', () => { pm.expect(a.price).to.be.above(0); pm.expect(a.price).to.be.within(a.priceMin, a.priceMax); });",
+                  "pm.collectionVariables.set('analysisId', a.analysisId);",
+                  "pm.collectionVariables.set('aiCategory', a.category);",
+                  "pm.collectionVariables.set('aiCondition', a.condition);",
+                  "pm.collectionVariables.set('aiPrice', a.price);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/analyze",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "analyze"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"imageId\": {{imageId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "물건 등록",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 201', () => pm.response.to.have.status(201));",
+                  "const it = pm.response.json();",
+                  "pm.collectionVariables.set('newItemId', it.id);",
+                  "pm.test('가격은 AI 분석값 그대로(앱이 못 바꿈)', () => pm.expect(it.price).to.eql(Number(pm.collectionVariables.get('aiPrice'))));",
+                  "pm.test('상태 AVAILABLE', () => pm.expect(it.status).to.eql('AVAILABLE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"포스트맨 테스트 물건\",\n  \"description\": \"Postman 자동 테스트로 등록한 물건입니다.\",\n  \"category\": \"{{aiCategory}}\",\n  \"condition\": \"{{aiCondition}}\",\n  \"imageIds\": [{{imageId}}],\n  \"analysisId\": {{analysisId}},\n  \"wishCategories\": [\"DIGITAL\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "물건 수정(주인)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('제목 바뀜', () => pm.expect(pm.response.json().title).to.include('수정'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{newItemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{newItemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"포스트맨 테스트 물건(수정)\",\n  \"description\": \"수정됨\",\n  \"wishCategories\": [\n    \"DIGITAL\",\n    \"BOOK\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "물건 수정(남) → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 403', () => pm.response.to.have.status(403));",
+                  "pm.test('오류 코드 NOT_OWNER', () => pm.expect(pm.response.json().code).to.eql('NOT_OWNER'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMinji}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{newItemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{newItemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"남이 바꾸기\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. 교환 · 채팅 · 알림",
+      "item": [
+        {
+          "name": "교환 요청 보내기",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 201', () => pm.response.to.have.status(201));",
+                  "const e = pm.response.json();",
+                  "pm.collectionVariables.set('exchangeId', e.id);",
+                  "pm.test('상태 REQUESTED', () => pm.expect(e.status).to.eql('REQUESTED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/exchanges",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "exchanges"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetItemId\": {{minjiItemId}},\n  \"offeredItemId\": {{newItemId}},\n  \"message\": \"Postman 테스트 교환 요청이에요\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "같은 요청 다시 → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 409', () => pm.response.to.have.status(409));",
+                  "pm.test('오류 코드 DUPLICATE_REQUEST', () => pm.expect(pm.response.json().code).to.eql('DUPLICATE_REQUEST'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/exchanges",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "exchanges"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetItemId\": {{minjiItemId}},\n  \"offeredItemId\": {{newItemId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "받은 교환 요청(민지)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('방금 요청이 보임', () => pm.expect(pm.response.json().exchanges.map(e => e.id)).to.include(Number(pm.collectionVariables.get('exchangeId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMinji}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/exchanges?box=received",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "exchanges"
+              ],
+              "query": [
+                {
+                  "key": "box",
+                  "value": "received"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "요청한 사람이 수락 시도 → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 403', () => pm.response.to.have.status(403));",
+                  "pm.test('오류 코드 NOT_RECEIVER', () => pm.expect(pm.response.json().code).to.eql('NOT_RECEIVER'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/exchanges/{{exchangeId}}/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "exchanges",
+                "{{exchangeId}}",
+                "accept"
+              ]
+            }
+          }
+        },
+        {
+          "name": "교환 요청 취소(요청자)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('상태 CANCELED', () => pm.expect(pm.response.json().status).to.eql('CANCELED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/exchanges/{{exchangeId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "exchanges",
+                "{{exchangeId}}",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "채팅방 열기",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200/201', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.collectionVariables.set('roomId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/chats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chats"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": {{minjiItemId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "채팅 보내기",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 201', () => pm.response.to.have.status(201));",
+                  "pm.test('내용 그대로', () => pm.expect(pm.response.json().content).to.include('Postman'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/chats/{{roomId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chats",
+                "{{roomId}}",
+                "messages"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"안녕하세요! Postman 테스트 메시지예요.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "채팅 메시지 목록(민지)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('방금 메시지 보임', () => pm.expect(pm.response.json().messages.map(m => m.content).join()).to.include('Postman 테스트 메시지'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMinji}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/chats/{{roomId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chats",
+                "{{roomId}}",
+                "messages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "남의 채팅방 → 403",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({url: pm.collectionVariables.get('baseUrl') + '/api/auth/login', method: 'POST', header: {'Content-Type':'application/json'}, body: {mode:'raw', raw: JSON.stringify({username:'junho', password:'sbada1234'})}}, (e, r) => { if (!e && r.code === 200) pm.collectionVariables.set('tokenOther', r.json().accessToken); });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 403/401', () => pm.expect(pm.response.code).to.be.oneOf([403, 401]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOther}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/chats/{{roomId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chats",
+                "{{roomId}}",
+                "messages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "알림 목록(민지)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('알림 배열', () => pm.expect(pm.response.json().notifications).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMinji}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            }
+          }
+        },
+        {
+          "name": "안 읽은 알림 수(민지)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('숫자', () => pm.expect(pm.response.json().unread).to.be.a('number'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMinji}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/unread-count",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. 정리(테스트 물건 내리기)",
+      "item": [
+        {
+          "name": "물건 내리기(주인)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{newItemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{newItemId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "내린 물건 → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{newItemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{newItemId}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8097"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### 실행 데이터 · 비밀값 (Git에 넣지 않는다) ###
+data/
+logs/
+*.log
+.env
+.env.*
+!.env.example
+application-local.properties
+*service-account*.json
+*.jks
+*.p12
+
+### IDE ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+.vscode/
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache

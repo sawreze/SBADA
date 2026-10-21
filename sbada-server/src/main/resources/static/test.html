@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스바다 테스트 화면</title>
+<!--
+  에뮬레이터와 똑같은 스바다 앱을 브라우저에서 본다.
+  - 안의 앱 = 같은 Flutter 코드를 웹으로 빌드한 것(/app/, scripts\build-web.bat)
+  - 비율 = 에뮬레이터 Medium Phone 1080 x 2400(9:20). 논리 크기 411 x 914 dp 그대로 그린 뒤 창 높이에 맞춰 통째로 줄인다
+    → 글자 줄바꿈 · 칸 배치가 에뮬레이터와 같다.
+  - API 를 직접 눌러 보는 화면은 /api-test.html
+-->
+<style>
+  :root { --bg: #0B0C0E; --panel: #1A1C20; --line: #2A2D33; --text: #F2F4F7; --text3: #8A919C; --mint: #93E1B7; --on-mint: #0D1F16; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font-family: 'Noto Sans KR', system-ui, -apple-system, 'Malgun Gothic', sans-serif; overflow: hidden; }
+  .wrap { height: 100%; display: flex; align-items: center; justify-content: center; gap: 28px; padding: 16px; }
+  /* 폰: 논리 크기 411 x 914 + 테두리. 실제 표시 크기는 JS 가 scale 로 맞춘다 */
+  .stage { flex: none; position: relative; }
+  .phone { position: absolute; left: 0; top: 0; transform-origin: top left;
+           width: calc(411px + 2 * 12px); height: calc(914px + 2 * 12px); padding: 12px;
+           background: #000; border-radius: 52px; box-shadow: 0 0 0 2px #2B2E35, 0 30px 80px rgba(0,0,0,.6); }
+  .screen { width: 411px; height: 914px; border-radius: 40px; overflow: hidden; background: #111215; position: relative; }
+  .screen iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .side { width: 260px; display: flex; flex-direction: column; gap: 12px; }
+  .side h1 { margin: 0; font-size: 20px; }
+  .side p { margin: 0; color: var(--text3); font-size: 13px; line-height: 1.6; }
+  .btn { height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+         font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+  .btn.primary { background: var(--mint); color: var(--on-mint); border: 0; font-weight: 800; }
+  .info { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; font-size: 13px; color: var(--text3); line-height: 1.7; }
+  .info b { color: var(--text); font-weight: 600; }
+  .missing { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center;
+             padding: 32px; color: var(--text3); font-size: 15px; line-height: 1.7; background: #111215; }
+  @media (max-width: 760px) { .side { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage" id="stage">
+    <div class="phone" id="phone">
+      <div class="screen">
+        <iframe id="app" src="/app/" title="스바다 앱" allow="camera; clipboard-read; clipboard-write"></iframe>
+        <div class="missing" id="missing">앱 웹 빌드가 아직 없어요.<br><br><b>scripts\build-web.bat</b> 를 실행한 뒤<br>이 화면을 새로고침해 주세요.</div>
+      </div>
+    </div>
+  </div>
+  <div class="side">
+    <h1>스바다 테스트 화면</h1>
+    <p>에뮬레이터와 같은 앱 코드를 같은 비율(1080 × 2400, 9:20)로 띄웠어요. 서버와 같은 DB를 쓰므로 에뮬레이터에서 한 일이 여기에도 바로 보여요.</p>
+    <button class="btn primary" id="reload">앱 다시 불러오기</button>
+    <a class="btn" href="/app/" target="_blank">앱만 새 탭으로</a>
+    <a class="btn" href="/api-test.html" target="_blank">API 테스트 화면</a>
+    <div class="info">
+      <b>시연 계정</b> minji · junho · seoyeon · dohyun<br>
+      <b>화면 크기</b> <span id="size">411 × 914 dp</span><br>
+      <b>에뮬레이터와 다른 점</b><br>
+      · 동네지도: 카카오맵 대신 앱의 약도(웹에서 WebView 미지원)<br>
+      · 사진 찍기: 카메라 대신 파일 고르기<br>
+      · 카카오 로그인 · 상단 알림 표시줄: 앱에서만
+    </div>
+  </div>
+</div>
+<script>
+  // 폰(411 x 914 + 테두리)을 창 높이 · 너비에 맞게 줄인다. 안쪽 앱은 항상 411 x 914 로 그려진다.
+  const phone = document.getElementById('phone'), stage = document.getElementById('stage');
+  const W = 411 + 24, H = 914 + 24;
+  function fit() {
+    const side = window.innerWidth > 760 ? 260 + 28 : 0;
+    const s = Math.min(1, (window.innerHeight - 32) / H, (window.innerWidth - 32 - side) / W);
+    phone.style.transform = `scale(${s})`;
+    stage.style.width = W * s + 'px';
+    stage.style.height = H * s + 'px';
+    document.getElementById('size').textContent = `411 × 914 dp (${Math.round(s * 100)}% 크기로 표시)`;
+  }
+  window.addEventListener('resize', fit);
+  fit();
+  document.getElementById('reload').onclick = () => { document.getElementById('app').src = '/app/?t=' + Date.now(); };
+  // 웹 빌드가 없으면 안내를 보여 준다
+  fetch('/app/index.html', { method: 'HEAD' }).then((r) => {
+    if (!r.ok) document.getElementById('missing').style.display = 'flex';
+  }).catch(() => { document.getElementById('missing').style.display = 'flex'; });
+</script>
+</body>
+</html>
