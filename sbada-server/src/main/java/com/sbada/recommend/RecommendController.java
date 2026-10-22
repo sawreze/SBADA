@@ -84,4 +84,16 @@ public class RecommendController {
         // area(선택): 홈 왼쪽 위 범위 — '서울 마포구 망원동'(내 동네) · '서울 마포구'(시 · 구) · '서울'(도) · 없음(전국)
         return service.feed((Long) auth.getPrincipal(), Math.max(1, Math.min(limit, 60)), area);
     }
+
+    /**
+     * ■ 매치도 점수   GET /api/feed/scores?ids=12,34,56   (🔒)   동네지도 핀의 %
+     *   지도에 보이는 물건들만 홈 추천과 같은 식으로 점수를 매겨 돌려준다(최대 200개, 내 물건 · 교환 불가 물건은 빠짐).
+     * 응답 200 — {"scores": {"12": 87, "34": 72}}
+     */
+    @GetMapping("/api/feed/scores")
+    public java.util.Map<String, java.util.Map<Long, Integer>> scores(@RequestParam java.util.List<Long> ids,
+                                                                    Authentication auth) {
+        java.util.List<Long> limited = ids.stream().distinct().limit(200).toList();
+        return java.util.Map.of("scores", service.scoresFor((Long) auth.getPrincipal(), limited));
+    }
 }

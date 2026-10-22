@@ -3,10 +3,12 @@ package com.sbada.recommend;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -201,21 +203,47 @@ public class RecommendationService {
     /** area = 홈 왼쪽 위에서 고른 범위('서울 마포구 망원동' · '서울 마포구' · '서울', null = 전국). 그 안의 물건만 후보 */
     @Transactional(readOnly = true)
     public RecommendDtos.FeedResult feed(long userId, int limit, String area) {
-        AppUser me = users.findById(userId)
-                .orElseThrow(() -> new ApiException(401, "TOKEN_INVALID", "사용자를 확인할 수 없습니다."));
         List<Item> candidates = items.findOthers(ItemStatus.AVAILABLE, userId, ItemService.cleanArea(area),
                 PageRequest.of(0, CANDIDATE_LIMIT));
-        List<Item> myItems = items.findMine(userId, ItemStatus.HIDDEN).stream()
-                .filter(i -> i.getStatus() == ItemStatus.AVAILABLE).toList();
-        Map<Category, Double> myPrefs = preferences.weightsOf(userId);
-        boolean coldStart = myPrefs.isEmpty();
-        double maxPop = candidates.stream()
-                .mapToDouble(i -> ScoreMath.popularityRaw(i.getViewCount(), i.getRequestCount())).max().orElse(1);
+        boolean coldStart = preferences.weightsOf(userId).isEmpty();
+        List<Scored> scored = scoreForFeed(userId, candidates, candidates);
 
         Set<Long> sent = new HashSet<>();
         for (ExchangeRequest e : exchanges.findSentWithStatus(userId, ExchangeStatus.REQUESTED)) {
             sent.add(e.getTargetItem().getId());
         }
+        List<RecommendDtos.Recommendation> ranked = diversify(scored, limit).stream()
+                .map(s -> toRecommendation(s, sent.contains(s.item().getId()) ? "REQUESTED" : null)).toList();
+        return new RecommendDtos.FeedResult(coldStart ? "feed-v1(cold-start)" : "feed-v1", candidates.size(), ranked);
+    }
+
+    /**
+     * 동네지도 핀의 매치도 %: 지도에 보이는 물건들(ids)만 홈 추천과 같은 식으로 점수를 매긴다.
+     * 예전에는 피드 상위 60개에만 점수가 있어서, 그 밖의 물건(예: 용산으로 옮긴 물건) 핀은 '–' 로 보였다.
+     * 인기도의 기준(가장 인기 있는 물건)은 피드와 같게 전국 후보 300개에서 잡는다. 내 물건 · 교환 불가 물건은 뺀다.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Integer> scoresFor(long userId, Collection<Long> ids) {
+        List<Item> targets = items.findAllById(ids).stream()
+                .filter(i -> i.getStatus() == ItemStatus.AVAILABLE && !i.isOwnedBy(userId)).toList();
+        List<Item> popBase = items.findOthers(ItemStatus.AVAILABLE, userId, null, PageRequest.of(0, CANDIDATE_LIMIT));
+        Map<Long, Integer> out = new LinkedHashMap<>();
+        for (Scored sc : scoreForFeed(userId, targets, popBase)) {
+            out.put(sc.item().getId(), (int) Math.round(sc.total() * 100));
+        }
+        return out;
+    }
+
+    /** 홈 추천 점수 = 0.40·선호도 + 0.30·가격 적합도 + 0.15·신선도 + 0.15·인기도 (인기도는 popBase 의 최댓값 기준) */
+    private List<Scored> scoreForFeed(long userId, List<Item> candidates, List<Item> popBase) {
+        AppUser me = users.findById(userId)
+                .orElseThrow(() -> new ApiException(401, "TOKEN_INVALID", "사용자를 확인할 수 없습니다."));
+        List<Item> myItems = items.findMine(userId, ItemStatus.HIDDEN).stream()
+                .filter(i -> i.getStatus() == ItemStatus.AVAILABLE).toList();
+        Map<Category, Double> myPrefs = preferences.weightsOf(userId);
+        boolean coldStart = myPrefs.isEmpty();
+        double maxPop = java.util.stream.Stream.concat(popBase.stream(), candidates.stream())
+                .mapToDouble(i -> ScoreMath.popularityRaw(i.getViewCount(), i.getRequestCount())).max().orElse(1);
 
         Instant now = Instant.now();
         List<Scored> scored = new ArrayList<>();
@@ -273,9 +301,7 @@ public class RecommendationService {
                     RecommendDtos.Factor.of("popularity", "인기도", pop, F_POP));
             scored.add(new Scored(c, total, diff, factors, reasons));
         }
-        List<RecommendDtos.Recommendation> ranked = diversify(scored, limit).stream()
-                .map(s -> toRecommendation(s, sent.contains(s.item().getId()) ? "REQUESTED" : null)).toList();
-        return new RecommendDtos.FeedResult(coldStart ? "feed-v1(cold-start)" : "feed-v1", candidates.size(), ranked);
+        return scored;
     }
 
     /** 온보딩 가격대 안이면 1, 밖이면 가장 가까운 경계와의 가격 가우시안 */

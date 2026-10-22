@@ -114,12 +114,14 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  /// 매치도 = 홈 'AI 추천'과 같은 추천 점수(선호도 · 가격 적합도 · 신선도 · 인기도)
+  /// 매치도 = 홈 'AI 추천'과 같은 추천 점수(선호도 · 가격 적합도 · 신선도 · 인기도).
+  /// 지도에 보이는 물건 전부의 점수를 받는다(예전엔 피드 상위 60개만 있어서 용산 등 다른 물건 핀이 '–' 였음).
   Future<void> _loadScores() async {
     try {
-      final feed = await widget.services.items.feed(limit: 100);
+      final shown = await _future;
+      final scores = await widget.services.items.scores([for (final i in shown) i.id]);
       if (!mounted) return;
-      setState(() => _scores = {for (final r in feed.items) r.item.id: r.score});
+      setState(() => _scores = scores);
     } catch (_) {
       // 로그인 전이거나 서버 오류면 점수 없이 핀만 보여 준다
     }

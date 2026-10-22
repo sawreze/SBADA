@@ -52,6 +52,14 @@ class ItemRepository {
     return (json['items'] as List).map((e) => Item.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// 동네지도 핀의 매치도: 보이는 물건들만 홈 추천과 같은 식으로 점수(GET /api/feed/scores?ids=). {물건 번호: 점수}
+  Future<Map<int, int>> scores(List<int> ids) async {
+    if (ids.isEmpty) return const {};
+    final json = await api.get('/api/feed/scores', query: {'ids': ids.take(200).join(',')}) as Map<String, dynamic>;
+    final raw = json['scores'] as Map<String, dynamic>;
+    return {for (final e in raw.entries) int.parse(e.key): (e.value as num).toInt()};
+  }
+
   /// AI 상품 요약(GET /api/items/{id}/summary). 처음 한 번은 Gemma 가 쓰느라 30초 안팎 → 100초까지 기다린다
   Future<AiItemSummary> summary(int itemId) async => AiItemSummary.fromJson(
       await api.get('/api/items/$itemId/summary', timeout: const Duration(seconds: 100)) as Map<String, dynamic>);
