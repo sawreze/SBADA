@@ -44,4 +44,22 @@ void main() {
     // 좌우 여백 16 × 2, 안쪽 여백 6 × 2 를 뺀 너비를 4칸이 나눠 쓴다
     expect((320 - 32 - 12) / 4, greaterThanOrEqualTo(48));
   });
+
+  testWidgets('화이트 모드 탭바는 당근 스타일: 흰 캡슐(흐림 없음) + 선택 칸 회색 둥근 배경, 다크는 유리 그대로', (tester) async {
+    addTearDown(() => Sb.darkMode.value = true);
+    Sb.darkMode.value = false;
+    await tester.pumpWidget(host(0, (_) {}));
+    expect(find.byKey(const ValueKey('tab-bar-white')), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsNothing);
+    final bar = tester.widget<DecoratedBox>(find.byKey(const ValueKey('tab-bar-white'))).decoration as BoxDecoration;
+    expect(bar.color, const Color(0xFFFFFFFF));
+    final pill = tester.widget<DecoratedBox>(find.byKey(const ValueKey('tab-selected-pill'))).decoration as BoxDecoration;
+    expect(pill.color, const Color(0xFFECEEF1), reason: '선택 칸 = 회색');
+    expect(pill.border, isNull);
+
+    Sb.darkMode.value = true;
+    await tester.pumpWidget(host(0, (_) {}));
+    expect(find.byKey(const ValueKey('tab-bar-white')), findsNothing);
+    expect(find.byType(BackdropFilter), findsOneWidget, reason: '다크는 리퀴드 글래스');
+  });
 }

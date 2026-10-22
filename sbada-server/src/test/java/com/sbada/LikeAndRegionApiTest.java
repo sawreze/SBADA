@@ -152,4 +152,63 @@ class LikeAndRegionApiTest {
         mvc.perform(put("/api/me/region").contentType(MediaType.APPLICATION_JSON).content("{\"region\":\"서울\"}"))
                 .andExpect(status().isUnauthorized());
     }
+
+    /** 내 동네 최대 2개: 추가 PUT /api/me/second-region · 바꾸기 POST /api/me/region/swap · 지우기 DELETE (V13) */
+    @Test
+    void secondRegionAddSwapDelete() throws Exception {
+        TestSupport.Account a = TestSupport.newAccount(mvc, "region2");
+        mvc.perform(put("/api/me/region").header("Authorization", a.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"region\":\"마포구 망원동\"}"))
+                .andExpect(jsonPath("$.user.secondRegion").doesNotExist());
+
+        // 추가한 동네가 없으면 바꾸기 409
+        mvc.perform(post("/api/me/region/swap").header("Authorization", a.bearer()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NO_SECOND_REGION"));
+        // 지금 동네와 같은 동네는 추가 못 함 400, 빈 값 400, 로그인 없이 401
+        mvc.perform(put("/api/me/second-region").header("Authorization", a.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"region\":\" 마포구 망원동 \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SAME_REGION"));
+        mvc.perform(put("/api/me/second-region").header("Authorization", a.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"region\":\" \"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(put("/api/me/second-region").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"region\":\"서울\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // 추가 → GET /api/me 에도 보임
+        mvc.perform(put("/api/me/second-region").header("Authorization", a.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"region\":\" 부산 해운대구 우동 \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.region").value("마포구 망원동"))
+                .andExpect(jsonPath("$.user.secondRegion").value("부산 해운대구 우동"));
+        mvc.perform(get("/api/me").header("Authorization", a.bearer()))
+                .andExpect(jsonPath("$.user.secondRegion").value("부산 해운대구 우동"));
+
+        // 바꾸기: 두 동네가 서로 자리를 바꾼다. 두 번 바꾸면 처음으로
+        mvc.perform(post("/api/me/region/swap").header("Authorization", a.bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.region").value("부산 해운대구 우동"))
+                .andExpect(jsonPath("$.user.secondRegion").value("마포구 망원동"));
+        mvc.perform(post("/api/me/region/swap").header("Authorization", a.bearer()))
+                .andExpect(jsonPath("$.user.region").value("마포구 망원동"))
+                .andExpect(jsonPath("$.user.secondRegion").value("부산 해운대구 우동"));
+
+        // 지금 동네를 두 번째 동네와 같게 바꾸면 두 번째는 비워진다(같은 동네가 두 번 남지 않게)
+        mvc.perform(put("/api/me/region").header("Authorization", a.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"region\":\"부산 해운대구 우동\"}"))
+                .andExpect(jsonPath("$.user.region").value("부산 해운대구 우동"))
+                .andExpect(jsonPath("$.user.secondRegion").doesNotExist());
+
+        // 다시 추가 → 지우기(두 번 해도 200)
+        mvc.perform(put("/api/me/second-region").header("Authorization", a.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"region\":\"마포구 합정동\"}"))
+                .andExpect(jsonPath("$.user.secondRegion").value("마포구 합정동"));
+        for (int i = 0; i < 2; i++) {
+            mvc.perform(delete("/api/me/second-region").header("Authorization", a.bearer()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.user.secondRegion").doesNotExist());
+        }
+    }
 }

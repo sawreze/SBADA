@@ -8,6 +8,7 @@ class AppUser {
     required this.region,
     required this.onboarded,
     this.profileImageUrl,
+    this.secondRegion,
   });
 
   final int id;
@@ -19,6 +20,9 @@ class AppUser {
   /// 프로필 사진 주소(/api/images/12). 없으면 null → 닉네임 첫 글자
   final String? profileImageUrl;
 
+  /// 하나 더 추가한 동네(내 동네는 최대 2개). 없으면 null. 홈 왼쪽 위 동네 이름을 눌러 region 과 바꾼다.
+  final String? secondRegion;
+
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
         id: reqInt(j, 'id'),
         username: reqStr(j, 'username'),
@@ -26,6 +30,7 @@ class AppUser {
         region: optStr(j, 'region') ?? '',
         onboarded: optBool(j, 'onboarded'),
         profileImageUrl: optStr(j, 'profileImageUrl'),
+        secondRegion: optStr(j, 'secondRegion'),
       );
 
   Map<String, dynamic> toJson() => {
@@ -35,6 +40,7 @@ class AppUser {
         'region': region,
         'onboarded': onboarded,
         'profileImageUrl': profileImageUrl,
+        'secondRegion': secondRegion,
       };
 }
 

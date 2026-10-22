@@ -134,7 +134,7 @@ class _MatchScreenState extends State<MatchScreen> {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(base.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text('AI ${formatWon(base.price)}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              PriceText(base.price, size: 18),
             ]),
           ),
         ]),

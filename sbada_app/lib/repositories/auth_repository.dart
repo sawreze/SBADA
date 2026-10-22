@@ -63,6 +63,28 @@ class AuthRepository {
     return profile;
   }
 
+  /// 동네 하나 더 추가(PUT /api/me/second-region, 최대 2개). 지금 동네와 같으면 400 SAME_REGION
+  Future<MeProfile> setSecondRegion(String region) async {
+    final profile = MeProfile.fromJson(
+        await api.put('/api/me/second-region', body: {'region': region}) as Map<String, dynamic>);
+    await session.updateUser(profile.user);
+    return profile;
+  }
+
+  /// 추가한 동네 지우기(DELETE /api/me/second-region)
+  Future<MeProfile> deleteSecondRegion() async {
+    final profile = MeProfile.fromJson(await api.delete('/api/me/second-region') as Map<String, dynamic>);
+    await session.updateUser(profile.user);
+    return profile;
+  }
+
+  /// 지금 동네 ↔ 추가한 동네 바꾸기(POST /api/me/region/swap) — 홈 왼쪽 위 동네 이름을 눌러서
+  Future<MeProfile> swapRegion() async {
+    final profile = MeProfile.fromJson(await api.post('/api/me/region/swap') as Map<String, dynamic>);
+    await session.updateUser(profile.user);
+    return profile;
+  }
+
   /// 내 정보 변경: 닉네임 · 아이디(PUT /api/me/profile). 로그인 토큰은 그대로 쓴다.
   Future<MeProfile> changeProfile({required String username, required String nickname}) async {
     final profile = MeProfile.fromJson(await api.put('/api/me/profile', body: {'username': username, 'nickname': nickname})

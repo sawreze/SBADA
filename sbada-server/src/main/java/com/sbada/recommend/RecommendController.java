@@ -79,7 +79,9 @@ public class RecommendController {
      * (앱 홈의 'AI 추천' 목록, 동네지도 핀의 매치도 %)
      */
     @GetMapping("/api/feed")
-    public RecommendDtos.FeedResult feed(@RequestParam(defaultValue = "30") int limit, Authentication auth) {
-        return service.feed((Long) auth.getPrincipal(), Math.max(1, Math.min(limit, 60)));
+    public RecommendDtos.FeedResult feed(@RequestParam(defaultValue = "30") int limit,
+                                         @RequestParam(required = false) String area, Authentication auth) {
+        // area(선택): 홈 왼쪽 위 범위 — '서울 마포구 망원동'(내 동네) · '서울 마포구'(시 · 구) · '서울'(도) · 없음(전국)
+        return service.feed((Long) auth.getPrincipal(), Math.max(1, Math.min(limit, 60)), area);
     }
 }

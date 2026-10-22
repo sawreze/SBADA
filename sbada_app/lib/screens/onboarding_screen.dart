@@ -9,6 +9,7 @@ import '../network/session.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/gps_dong_button.dart';
 import 'login_screen.dart';
 import 'splash_gate.dart';
 
@@ -50,6 +51,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _band = PriceBand.all.length - 1; // 상관없어요
   final _keywordInput = TextEditingController();
   final _region = TextEditingController();
+
+  /// GPS 로 찾은 동네(칸에 그대로 있으면 '찾은 동네' 표시)
+  String? _gpsRegion;
   bool _saving = false;
 
   bool get _hasWelcome => widget.mode == OnboardingMode.firstRun;
@@ -309,24 +313,44 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ]);
   }
 
-  /// ④ 사는 동네: 도시 · 구 · 동을 입력하면 아래에 맞는 동네 후보가 뜬다(눌러서 고르기). 목록에 없어도 직접 입력한 그대로 저장
+  /// ④ 사는 동네: '현재 위치로 동네 찾기'(GPS) → 찾은 동네가 아래 칸에 채워진다.
+  /// GPS 를 못 쓰면 직접 입력: 도시 · 구 · 동을 적으면 맞는 동네 후보가 뜬다(눌러서 고르기). 목록에 없어도 적은 그대로 저장
   Widget _regionStep() {
     final q = _regionText;
     final words = q.split(' ').where((w) => w.isNotEmpty).toList();
     final all = knownRegions();
-    final hits = q.isEmpty
+    final hits = q.isEmpty || q == _gpsRegion
         ? const <String>[]
         : all.where((r) => words.every((w) => r.contains(w))).take(8).toList();
     return ListView(padding: const EdgeInsets.all(20), children: [
       Text('어느 동네에\n사세요?', style: sbTitle),
       const SizedBox(height: 8),
-      Text('사는 도시나 동네를 적어 주세요. 홈 왼쪽 위에 내 동네가 뜨고, 가까운 이웃의 물건부터 보여 드려요.', style: sbBody),
+      Text('지금 있는 곳으로 동네를 찾아 드려요. 홈 왼쪽 위에 내 동네가 뜨고, 가까운 이웃의 물건부터 보여 드려요.', style: sbBody),
       const SizedBox(height: 20),
+      GpsDongButton(
+        services: widget.services,
+        found: q.isNotEmpty && q == _gpsRegion ? q : null,
+        onFound: (d) => setState(() {
+          _gpsRegion = d.region;
+          _region.text = d.region;
+          _region.selection = TextSelection.collapsed(offset: d.region.length);
+          FocusScope.of(context).unfocus();
+        }),
+      ),
+      const SizedBox(height: 20),
+      Row(children: [
+        Expanded(child: Divider(color: Sb.line)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text('또는 직접 입력', style: TextStyle(fontSize: 13, color: Sb.text2)),
+        ),
+        Expanded(child: Divider(color: Sb.line)),
+      ]),
+      const SizedBox(height: 12),
       TextField(
         key: const ValueKey('onboarding-region'),
         controller: _region,
         maxLength: 20,
-        autofocus: true,
         textInputAction: TextInputAction.done,
         onChanged: (_) => setState(() {}),
         onSubmitted: (_) {
@@ -347,7 +371,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               _region.selection = TextSelection.collapsed(offset: r.length);
             }),
           ),
-      ] else if (q.isNotEmpty)
+      ] else if (q.isNotEmpty && q == _gpsRegion)
+        const SizedBox.shrink() // GPS 로 찾은 동네는 위에 '찾은 동네'로 이미 보인다
+      else if (q.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text('목록에 없는 동네예요. 적은 그대로 \'$q\'(으)로 저장해요.', style: sbCaption),

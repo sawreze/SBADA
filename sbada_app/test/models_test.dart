@@ -3,6 +3,7 @@ import 'package:sbada/models/ai_analysis.dart';
 import 'package:sbada/models/exchange.dart';
 import 'package:sbada/models/item.dart';
 import 'package:sbada/models/recommendation.dart';
+import 'package:sbada/models/user.dart';
 import 'package:sbada/util/format.dart';
 
 /// 서버 응답 표본(실제 API 모양)을 모델로 읽을 수 있는지 확인한다(10장 3.3).
@@ -118,5 +119,16 @@ void main() {
     final now = DateTime(2026, 10, 20, 12);
     expect(timeAgo(now.subtract(const Duration(minutes: 5)), now: now), '5분 전');
     expect(timeAgo(now.subtract(const Duration(hours: 3)), now: now), '3시간 전');
+  });
+
+  test('사용자: 추가한 동네(secondRegion, 최대 2개)를 읽고, 없으면 null', () {
+    final two = AppUser.fromJson({
+      'id': 1, 'username': 'admin', 'nickname': '스바다', 'region': '서울 마포구 망원동', 'onboarded': true,
+      'secondRegion': '부산 해운대구 우동',
+    });
+    expect(two.secondRegion, '부산 해운대구 우동');
+    expect(AppUser.fromJson(two.toJson()).secondRegion, '부산 해운대구 우동', reason: '기기 저장 후 다시 읽어도 같음');
+    final one = AppUser.fromJson({'id': 2, 'username': 'minji', 'nickname': '민지', 'region': '마포구 망원동'});
+    expect(one.secondRegion, isNull);
   });
 }

@@ -98,7 +98,16 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<!-- 스바다: GPS 로 내 동네 찾기(동네 이름만 쓴다, 좌표는 저장하지 않음) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>지금 있는 곳의 동네를 찾아 가까운 이웃의 물건을 보여 드리려고 위치를 사용해요.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>같은 와이파이에 있는 스바다 개발 서버에 연결하려고 로컬 네트워크를 사용해요.</string>
+	<!-- 푸시(FCM → APNs): 앱이 백그라운드일 때 원격 알림을 받는다. 실제 전달에는 유료 Apple 개발자 계정의 APNs 키 +
+	     Push Notifications 권한(entitlements)이 필요하다(무료 계정은 불가 — 00_내가_할일.md) -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

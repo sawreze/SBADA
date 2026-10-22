@@ -8,6 +8,7 @@ import '../network/api_exception.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../util/format.dart';
+import '../widgets/ai_summary_card.dart';
 import '../widgets/common.dart';
 import '../widgets/glass.dart';
 import '../widgets/item_card.dart';
@@ -268,7 +269,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         Text('${item.categoryLabel} · ${item.conditionLabel} · ${timeAgo(item.createdAt)}',
             style: TextStyle(fontSize: 13, color: Sb.text3)),
         const SizedBox(height: 8),
-        Text('AI ${formatWon(item.price)}', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Sb.navy)),
+        PriceText(item.price, size: 22),
         FutureBuilder<_MyMatch?>(
           future: _match,
           builder: (context, snap) {
@@ -294,6 +295,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             for (final w in item.wishCategoryLabels) Pill(w, color: Sb.blueSoft, textColor: Sb.mintText),
           ]),
         ],
+        // 지도 바로 위: AI 가 사진 · 글을 보고 쓴 요약(2026-10-22 사용자 요청). 실패하면 칸이 숨는다
+        AiSummaryCard(key: ValueKey('summary-${item.id}'), load: () => widget.services.items.summary(item.id)),
         const SizedBox(height: 20),
         TradePlaceCard(services: widget.services, item: item),
         const SizedBox(height: 16),
@@ -346,7 +349,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Sb.navy)),
         const SizedBox(height: 2),
-        Text(formatWon(it.price), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Sb.navy)),
+        PriceText(it.price),
         const SizedBox(height: 2),
         Text('${it.owner.region.split(' ').last} · ${timeAgo(it.createdAt)}',
             maxLines: 1, overflow: TextOverflow.ellipsis, style: sbCaption),

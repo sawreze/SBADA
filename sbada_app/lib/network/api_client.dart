@@ -34,8 +34,8 @@ class ApiClient {
     return query == null || query.isEmpty ? u : u.replace(queryParameters: query);
   }
 
-  Future<dynamic> get(String path, {Map<String, String>? query, bool auth = true}) =>
-      _send('GET', path, query: query, auth: auth);
+  Future<dynamic> get(String path, {Map<String, String>? query, bool auth = true, Duration? timeout}) =>
+      _send('GET', path, query: query, auth: auth, timeout: timeout);
 
   Future<dynamic> post(String path, {Object? body, bool auth = true, Duration? timeout}) =>
       _send('POST', path, body: body, auth: auth, timeout: timeout);

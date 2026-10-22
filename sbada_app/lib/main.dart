@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_gate.dart';
 import 'services/app_services.dart';
+import 'services/push_service.dart';
 import 'services/theme_controller.dart';
 import 'theme/app_theme.dart';
 
@@ -11,6 +12,7 @@ import 'theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ThemeController.load(); // 저장해 둔 다크/화이트 모드
+  await PushService.init(); // FCM(푸시): google-services.json 이 없으면 조용히 꺼짐
   // 실행 화면 그림(곰 · 손)을 미리 불러 두기 — 서비스 준비와 같이 기다린다
   final (services, _) = await (AppServices.create(), SwapLogo.precache()).wait;
   runApp(SbadaApp(services: services));

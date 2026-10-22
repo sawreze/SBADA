@@ -246,6 +246,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       'EXCHANGE_ACCEPTED' => Icons.check_rounded,
       'EXCHANGE_REJECTED' || 'EXCHANGE_CANCELED' => Icons.close_rounded,
       'ITEM_HELD' => Icons.block_rounded,
+      'ITEM_LIKED' => Icons.favorite_border_rounded,
       'MATCH_SUGGESTED' => Icons.auto_awesome,
       'CHAT_MESSAGE' => Icons.chat_bubble_outline_rounded,
       _ => Icons.notifications_none_rounded,

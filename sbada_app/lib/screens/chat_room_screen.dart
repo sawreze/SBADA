@@ -7,7 +7,6 @@ import '../models/exchange.dart';
 import '../network/api_exception.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
-import '../util/format.dart';
 import '../widgets/common.dart';
 import '../widgets/exchange_card.dart';
 import '../widgets/my_item_picker.dart';
@@ -284,7 +283,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(room.item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-            Text('AI ${formatWon(room.item.price)}${room.item.status == 'TRADED' ? ' · 교환완료' : ''}', style: sbCaption),
+            PriceText(room.item.price, size: 14, color: Sb.text2, after: room.item.status == 'TRADED' ? ' · 교환완료' : null),
           ]),
         ),
         if (canPropose)

@@ -26,13 +26,15 @@ public final class UserDtos {
 
     /**
      * 응답에 내보내는 사용자 정보. password_hash 는 절대 넣지 않는다.
-     * JSON 예: {"id":1,"username":"minji","nickname":"민지","region":"마포구 망원동","onboarded":true}
+     * JSON 예: {"id":1,"username":"minji","nickname":"민지","region":"마포구 망원동","onboarded":true,
+     *          "profileImageUrl":null,"secondRegion":"마포구 합정동"}   (secondRegion: 하나 더 추가한 동네, 없으면 null)
      */
     public record UserView(long id, String username, String nickname, String region, boolean onboarded,
-                           String profileImageUrl) {
+                           String profileImageUrl, String secondRegion) {
         public static UserView from(AppUser u) {
             String photo = u.getProfileImageId() == null ? null : "/api/images/" + u.getProfileImageId();
-            return new UserView(u.getId(), u.getUsername(), u.getNickname(), u.getRegion(), u.isOnboarded(), photo);
+            return new UserView(u.getId(), u.getUsername(), u.getNickname(), u.getRegion(), u.isOnboarded(), photo,
+                    u.getSecondRegion());
         }
     }
 

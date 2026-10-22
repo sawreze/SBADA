@@ -35,4 +35,15 @@ public final class NotificationDtos {
             @NotBlank(message = "기기 토큰이 필요합니다.") @Size(max = 300) String token,
             @Size(max = 20) String platform) {
     }
+
+    /**
+     * 알림 설정(계정정보 > 알림 설정, V14). JSON 예: {"like":true,"chat":false,"exchange":true,"pushReady":false}
+     * pushReady: 서버에 Firebase 서비스 계정이 설정돼 앱이 꺼져 있을 때도 푸시(FCM/APNs)를 보낼 수 있는지
+     */
+    public record NotificationSettings(boolean like, boolean chat, boolean exchange, boolean pushReady) {
+    }
+
+    /** PUT 본문: 바꿀 값만 보낸다. {"chat": false} */
+    public record SettingsRequest(Boolean like, Boolean chat, Boolean exchange) {
+    }
 }

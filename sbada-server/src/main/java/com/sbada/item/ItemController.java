@@ -1,6 +1,7 @@
 package com.sbada.item;
 
 import java.net.URI;
+import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -19,7 +20,8 @@ import jakarta.validation.Valid;
  * ┌──────────────────────────────────────────────────────────────┐
  * │ 물건(상품) API — CRUD                                           │
  * └──────────────────────────────────────────────────────────────┘
- *  GET    /api/items          공개  목록(최신순, 카테고리·검색어로 거르기)
+ *  GET    /api/items          공개  목록(최신순, 카테고리·검색어·범위로 거르기)
+ *  GET    /api/items/count    공개  범위 안 물건 수(홈 왼쪽 위 범위 고르기)
  *  GET    /api/items/{id}     공개  상세(로그인했으면 조회 수·선호도 학습)
  *  GET    /api/me/items       🔒    내 물건 목록(교환 완료 포함, 내린 물건 제외)
  *  POST   /api/items          🔒    등록 → 201 Created
@@ -61,8 +63,22 @@ public class ItemController {
     @GetMapping("/api/items")
     public ItemDtos.ItemList list(@RequestParam(required = false) String category,
                                   @RequestParam(required = false) String q,
+                                  @RequestParam(required = false) String area,
                                   @RequestParam(defaultValue = "50") int limit) {
-        return service.list(category, q, Math.max(1, Math.min(limit, 100)));
+        // area(선택): 범위 — 등록자 동네 이름에 그 단어들이 들어 있는 물건만('서울', '서울 마포구', '마포구 망원동'). 없으면 전국
+        return service.list(category, q, area, Math.max(1, Math.min(limit, 100)));
+    }
+
+    /**
+     * ■ 범위 안 물건 수   GET /api/items/count?area=서울 마포구   (공개)
+     *   홈 왼쪽 위 범위 고르기(내 동네 · 시 · 도 · 전국)에 '상품 N개'를 보여 주려고 쓴다. area 가 없으면 전국
+     * 응답 200 {"area": "서울 마포구", "count": 20}
+     * 오류: 400 INVALID_AREA
+     */
+    @GetMapping("/api/items/count")
+    public Map<String, Object> count(@RequestParam(required = false) String area) {
+        String a = ItemService.cleanArea(area);
+        return Map.of("area", a == null ? "전국" : a, "count", service.count(a));
     }
 
     /**

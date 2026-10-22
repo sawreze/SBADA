@@ -22,6 +22,10 @@ dependencies:
   kakao_flutter_sdk_user: ^2.0.1
   # 웹(브라우저 테스트 화면) 빌드에서 브라우저 WebSocket 을 쓰기 위한 Dart 공식 패키지(이미 http 가 쓰던 것을 직접 사용)
   web: ^1.1.1
+  # 푸시 알림(1장 6.4): 앱이 꺼져 있을 때 Android = FCM, iOS = FCM → APNs 로 받는다(Google 공식 FlutterFire).
+  # 설정 파일 google-services.json / GoogleService-Info.plist 는 Git 제외 — 없으면 푸시만 꺼지고 앱은 그대로 동작
+  firebase_core: ^5.0.0
+  firebase_messaging: ^17.0.0
 
 dev_dependencies:
   flutter_test:
@@ -33,3 +37,7 @@ flutter:
   assets:
     - assets/splash_left.png
     - assets/splash_right.png
+    # 로그인 화면 로고(앱 아이콘을 288px 로 줄인 것)
+    - assets/app_logo.png
+    # 인터넷 안 될 때 홈 그림(offline.png 를 넣으면 사용, 없으면 😭) — widgets/offline_view.dart
+    - assets/offline/

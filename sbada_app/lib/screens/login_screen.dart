@@ -108,11 +108,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(color: Sb.blue, borderRadius: BorderRadius.circular(20)),
-                        child: const Icon(Icons.swap_horiz_rounded, size: 36, color: Sb.onAccent),
+                      // 앱 아이콘(곰 · 머그컵, assets/app_logo.png = 런처 아이콘과 같은 그림)을 둥근 사각형으로
+                      child: Semantics(
+                        image: true,
+                        label: '스바다 로고',
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.asset('assets/app_logo.png', width: 72, height: 72, fit: BoxFit.cover),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),

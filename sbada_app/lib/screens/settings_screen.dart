@@ -48,7 +48,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('앱 설정', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
+      // 화이트 모드: 연회색 바탕 + 흰 카드(계정정보와 같음)
+      backgroundColor: Sb.groupedBg,
+      appBar: AppBar(
+        backgroundColor: Sb.groupedBg,
+        title: const Text('앱 설정', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           setState(_load);

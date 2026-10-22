@@ -65,7 +65,9 @@ class GlassTab {
   final ValueNotifier<int>? badge;
 }
 
-/// 화면 아래에 떠 있는 유리 캡슐 탭바(4칸). 선택된 칸 뒤에 밝은 유리 알약이 움직인다.
+/// 화면 아래에 떠 있는 캡슐 탭바(4칸). 선택된 칸 뒤에 알약이 움직인다.
+///  - 다크: 리퀴드 글래스(흐림 + 반투명) + 흰 빛 알약
+///  - 화이트: 당근 스타일(2026-10-22 사용자 요청) — 불투명 흰 캡슐 + 옅은 그림자, 선택 칸은 회색 둥근 배경
 /// 크기: 높이 64dp, 칸마다 최소 48dp 터치 영역(안드로이드 접근성 기준)
 class GlassTabBar extends StatelessWidget {
   const GlassTabBar({super.key, required this.tabs, required this.index, required this.onTap});
@@ -79,42 +81,54 @@ class GlassTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).padding.bottom;
+    final dark = Sb.isDark;
+    final bar = SizedBox(
+      height: height,
+      child: LayoutBuilder(builder: (context, c) {
+        final w = (c.maxWidth - 12) / tabs.length;
+        return Stack(children: [
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            left: 6 + w * index,
+            top: 6,
+            width: w,
+            height: height - 12,
+            child: DecoratedBox(
+              key: const ValueKey('tab-selected-pill'),
+              decoration: BoxDecoration(
+                // 선택 칸 알약: 다크는 흰 빛 유리, 화이트는 회색 둥근 배경(테두리 없음)
+                color: Sb.tabSelected,
+                borderRadius: BorderRadius.circular(999),
+                border: dark ? Border.all(color: const Color(0x1FFFFFFF), width: 0.8) : null,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(children: [
+              for (var i = 0; i < tabs.length; i++)
+                Expanded(child: _TabButton(tab: tabs[i], selected: i == index, onTap: () => onTap(i))),
+            ]),
+          ),
+        ]);
+      }),
+    );
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, bottom + 10),
-      child: Glass(
-        tint: Sb.glassBar,
-        child: SizedBox(
-          height: height,
-          child: LayoutBuilder(builder: (context, c) {
-            final w = (c.maxWidth - 12) / tabs.length;
-            return Stack(children: [
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                left: 6 + w * index,
-                top: 6,
-                width: w,
-                height: height - 12,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    // 선택 칸의 유리 알약: 다크는 흰 빛, 화이트는 민트 빛
-                    color: Sb.isDark ? const Color(0x24FFFFFF) : Sb.blue.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Sb.isDark ? const Color(0x1FFFFFFF) : const Color(0x14000000), width: 0.8),
-                  ),
-                ),
+      child: dark
+          ? Glass(tint: Sb.glassBar, child: bar)
+          // 화이트: 흐림(BackdropFilter) 없이 불투명 흰 캡슐 + 옅은 그림자 — 그리기도 가볍다
+          : DecoratedBox(
+              key: const ValueKey('tab-bar-white'),
+              decoration: BoxDecoration(
+                color: Sb.base,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Sb.line, width: 0.8),
+                boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 16, offset: Offset(0, 4))],
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Row(children: [
-                  for (var i = 0; i < tabs.length; i++)
-                    Expanded(child: _TabButton(tab: tabs[i], selected: i == index, onTap: () => onTap(i))),
-                ]),
-              ),
-            ]);
-          }),
-        ),
-      ),
+              child: bar,
+            ),
     );
   }
 }

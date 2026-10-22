@@ -18,7 +18,9 @@ import com.sbada.user.AppUserRepository;
  * 알림 전달 경로(1장 '폴링·SSE·WebSocket·푸시' 중 상황에 맞는 방식 고르기)
  *   ① DB에 저장   → 알림함에서 다시 볼 수 있다
  *   ② 접속 중이면 → WebSocket 으로 즉시 전달 → 앱이 Android 알림을 띄운다
- *   ③ 접속 안 함  → FCM 푸시(설정한 경우)
+ *   ③ 접속 안 함  → FCM 푸시(설정한 경우). iOS 는 FCM 이 다시 APNs 로 넘긴다(1장 그림 1-10)
+ *   - 계정정보 > 알림 설정에서 끈 종류(찜 · 채팅 · 교환, V14)는 ③ 푸시를 보내지 않고, ② 는 "silent":true 로 보내
+ *     앱이 배너 없이 배지만 올린다. ① 알림함 기록은 그대로 남는다.
  *
  * [프로그래밍 설명]
  *  - notify() 를 부르는 쪽(ExchangeService 등)의 트랜잭션에 함께 참여한다(@Transactional 기본 전파 = REQUIRED:
@@ -55,9 +57,10 @@ public class NotificationService {
 
     /** WebSocket 에 연결돼 있으면 즉시 전송, 아니면 FCM(설정 안 했으면 조용히 건너뜀 — 알림함에는 이미 저장됨) */
     private void deliver(long userId, NotificationDtos.NotificationView view) {
+        boolean wanted = wants(userId, NotificationType.valueOf(view.type()).settingKey());
         if (hub.isOnline(userId)) {
-            hub.sendToUser(userId, Map.of("type", "notification", "notification", view));
-        } else {
+            hub.sendToUser(userId, Map.of("type", "notification", "notification", view, "silent", !wanted));
+        } else if (wanted) {
             Map<String, String> data = new HashMap<>();
             data.put("type", view.type());
             if (view.refType() != null) {
@@ -72,9 +75,32 @@ public class NotificationService {
 
     /** 채팅처럼 알림함에 저장하지 않는 알림: 접속 중이 아니면 FCM 으로만 보낸다. */
     public void pushIfOffline(long userId, String title, String body, Map<String, String> data) {
-        if (!hub.isOnline(userId)) {
+        if (!hub.isOnline(userId) && wants(userId, NotificationType.CHAT_MESSAGE.settingKey())) {
             fcm.sendAsync(userId, title, body, data);
         }
+    }
+
+    /** 알림 설정에서 이 종류를 켜 두었는지(설정에 없는 종류 · 없는 사용자 처리는 AppUser.wantsNotification) */
+    private boolean wants(long userId, String settingKey) {
+        return settingKey == null || users.findById(userId).map(u -> u.wantsNotification(settingKey)).orElse(false);
+    }
+
+    /** GET /api/me/notification-settings */
+    @Transactional(readOnly = true)
+    public NotificationDtos.NotificationSettings settings(long userId) {
+        AppUser u = users.findById(userId)
+                .orElseThrow(() -> new ApiException(401, "TOKEN_INVALID", "사용자를 확인할 수 없습니다."));
+        return new NotificationDtos.NotificationSettings(u.isNotifyLike(), u.isNotifyChat(), u.isNotifyExchange(),
+                fcm.isEnabled());
+    }
+
+    /** PUT /api/me/notification-settings — 보낸 값만 바뀐다(변경 감지로 UPDATE) */
+    @Transactional
+    public NotificationDtos.NotificationSettings changeSettings(long userId, NotificationDtos.SettingsRequest input) {
+        AppUser u = users.findById(userId)
+                .orElseThrow(() -> new ApiException(401, "TOKEN_INVALID", "사용자를 확인할 수 없습니다."));
+        u.changeNotificationSettings(input.like(), input.chat(), input.exchange());
+        return settings(userId);
     }
 
     /** GET /api/notifications — 최근 100개 + 안 읽은 수 */
@@ -118,6 +144,14 @@ public class NotificationService {
         devices.findByToken(token).ifPresentOrElse(
                 d -> d.reassign(user, platform),
                 () -> devices.save(new DeviceToken(user, token, platform)));
+    }
+
+    /** POST /api/devices/remove — 로그아웃할 때 이 기기 토큰을 지운다(내 토큰일 때만, 없으면 그냥 넘어감) */
+    @Transactional
+    public void unregisterDevice(long userId, String token) {
+        devices.findByToken(token)
+                .filter(d -> d.getUser().getId() == userId)
+                .ifPresent(devices::delete);
     }
 
     public boolean fcmEnabled() {

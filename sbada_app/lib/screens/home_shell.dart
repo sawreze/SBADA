@@ -5,6 +5,7 @@ import '../widgets/glass.dart';
 import 'chat_list_screen.dart';
 import 'feed_screen.dart';
 import 'map_screen.dart';
+import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'register_item_screen.dart';
 
@@ -32,6 +33,7 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     final s = widget.services;
     s.startRealtime();
+    s.push.opened.addListener(_onPushOpened);
     _pages = [
       FeedScreen(services: s),
       MapScreen(services: s),
@@ -44,6 +46,27 @@ class _HomeShellState extends State<HomeShell> {
       GlassTab(Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, '채팅', badge: s.unreadChats),
       const GlassTab(Icons.person_outline_rounded, Icons.person_rounded, '계정정보'),
     ];
+  }
+
+  @override
+  void dispose() {
+    widget.services.push.opened.removeListener(_onPushOpened);
+    super.dispose();
+  }
+
+  /// 푸시 알림을 눌러 앱이 열렸을 때: 채팅이면 채팅 탭, 그 밖에는 알림함(교환이면 받은 요청 칸)
+  void _onPushOpened() {
+    final data = widget.services.push.opened.value;
+    if (data == null || !mounted) return;
+    widget.services.push.opened.value = null;
+    final type = '${data['type'] ?? ''}';
+    if (type == 'CHAT_MESSAGE' || data['roomId'] != null) {
+      _select(2);
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => NotificationsScreen(services: widget.services, initialTab: type == 'EXCHANGE_REQUESTED' ? 1 : 0),
+    ));
   }
 
   Future<void> _register() async {

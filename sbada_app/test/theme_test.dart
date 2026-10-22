@@ -56,4 +56,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(Sb.darkMode.value, isTrue);
   });
+
+  test('화이트 모드 계정정보: 연회색 바탕 위 흰 카드, 다크는 예전 그대로(바탕 base · 카드 card)', () {
+    Sb.darkMode.value = false;
+    expect(Sb.groupedBg, const Color(0xFFF2F4F6));
+    expect(Sb.groupCard, const Color(0xFFFFFFFF));
+    expect(_contrast(Sb.navy, Sb.groupCard), greaterThanOrEqualTo(4.5));
+    expect(_contrast(Sb.text2, Sb.tabSelected), greaterThanOrEqualTo(4.5), reason: '선택 탭 글자');
+    Sb.darkMode.value = true;
+    expect(Sb.groupedBg, Sb.base);
+    expect(Sb.groupCard, Sb.card);
+  });
 }

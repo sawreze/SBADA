@@ -59,6 +59,20 @@ public class AppUser {
     @Column(nullable = false, length = 20)
     private String region;
 
+    /** 알림 설정(V14, 계정정보 > 알림 설정): 찜 · 채팅 · 교환 알림을 받을지. 기본 모두 true */
+    @Column(name = "notify_like", nullable = false)
+    private boolean notifyLike = true;
+
+    @Column(name = "notify_chat", nullable = false)
+    private boolean notifyChat = true;
+
+    @Column(name = "notify_exchange", nullable = false)
+    private boolean notifyExchange = true;
+
+    /** 하나 더 추가한 동네(Flyway V13, 없으면 null). 내 동네는 최대 2개 — 홈 왼쪽 위에서 region 과 서로 바꾼다. */
+    @Column(name = "second_region", length = 20)
+    private String secondRegion;
+
     /** 프로필 사진(item_images.id, Flyway V6). 사진은 POST /api/images 로 올린 것을 그대로 가리킨다. */
     @Column(name = "profile_image_id")
     private Long profileImageId;
@@ -124,6 +138,48 @@ public class AppUser {
     /** 계정정보 > 내 동네 설정(PUT /api/me/region). 앞뒤 공백은 지운다. */
     public void changeRegion(String region) {
         this.region = region.trim();
+        // 두 번째 동네와 같아지면 같은 동네가 두 번 남지 않게 두 번째를 비운다
+        if (this.region.equals(this.secondRegion)) {
+            this.secondRegion = null;
+        }
+    }
+
+    /** 계정정보 > 동네 추가(PUT /api/me/second-region). null 이면 지운다. */
+    public void changeSecondRegion(String secondRegion) {
+        this.secondRegion = secondRegion == null ? null : secondRegion.trim();
+    }
+
+    /** 알림 설정 바꾸기(PUT /api/me/notification-settings). null 인 값은 그대로 둔다(보낸 것만 바뀜) */
+    public void changeNotificationSettings(Boolean like, Boolean chat, Boolean exchange) {
+        if (like != null) {
+            this.notifyLike = like;
+        }
+        if (chat != null) {
+            this.notifyChat = chat;
+        }
+        if (exchange != null) {
+            this.notifyExchange = exchange;
+        }
+    }
+
+    /** 이 종류(like · chat · exchange)의 알림을 받는지. 설정에 없는 종류(null)는 항상 받는다 */
+    public boolean wantsNotification(String settingKey) {
+        if (settingKey == null) {
+            return true;
+        }
+        return switch (settingKey) {
+            case "like" -> notifyLike;
+            case "chat" -> notifyChat;
+            case "exchange" -> notifyExchange;
+            default -> true;
+        };
+    }
+
+    /** 홈 왼쪽 위 동네 바꾸기(POST /api/me/region/swap): 지금 동네 ↔ 추가한 동네 */
+    public void swapRegions() {
+        String current = this.region;
+        this.region = this.secondRegion;
+        this.secondRegion = current;
     }
 
     /** 계정정보 > 내 정보(PUT /api/me/profile). 아이디가 바뀌어도 로그인 토큰은 사용자 번호(sub) 기준이라 그대로 쓸 수 있다. */

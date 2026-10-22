@@ -6,15 +6,19 @@ import 'package:flutter/material.dart';
 import '../models/category.dart';
 import '../models/item.dart';
 import '../models/recommendation.dart';
+import '../network/api_exception.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
+import '../util/area_scope.dart';
 import '../util/hangul.dart';
 import '../widgets/common.dart';
 import '../widgets/item_card.dart';
 import '../widgets/net_image.dart';
+import '../widgets/offline_view.dart';
 import '../widgets/score_widgets.dart';
 import 'item_detail_screen.dart';
 import 'notifications_screen.dart';
+import 'region_screen.dart';
 
 /// 홈: 위쪽 '내 동네 · 검색 · 알림', 칩 줄(AI 추천 · 최신 · 카테고리), 물건 목록
 ///   AI 추천 = GET /api/feed (추천 알고리즘 점수순)   최신 = GET /api/items?category=&q=
@@ -47,12 +51,143 @@ class _FeedScreenState extends State<FeedScreen> {
   static const _historyKey = 'sbada.search.history';
   List<String> _history = [];
 
+  /// 홈 왼쪽 위 범위(내 동네 · 시 · 도 · 전국). 기기에 저장, 기본 = 전국(예전과 같은 화면)
+  static const _areaKey = 'sbada.feed.area';
+  AreaLevel _level = AreaLevel.nationwide;
+  Future<int>? _countFuture;
+
+  String get _region => widget.services.session.user?.region ?? '';
+  AreaOption get _scope => areaOptionFor(_region, _level);
+
+  Future<void> _loadArea() async {
+    try {
+      final raw = await widget.services.session.store.read(_areaKey);
+      final level = AreaLevel.values.where((l) => l.name == raw).firstOrNull;
+      if (level != null && level != _level && mounted) {
+        setState(() {
+          _level = level;
+          _load();
+        });
+      }
+    } catch (_) {
+      // 저장소를 못 읽으면 전국
+    }
+  }
+
+  /// 시트에서 '추가한 동네로 바꾸기' / '동네 추가하기'를 눌렀을 때 돌려주는 값
+  static const _swapRegion = 'swap-region';
+  static const _addRegion = 'add-region';
+
+  /// 범위 고르기: 아래에서 올라오는 시트. 단계마다 '상품 N개'(GET /api/items/count)
+  /// 맨 위 '내 동네'(최대 2개): 계정정보에서 추가한 동네를 누르면 지금 동네와 바꾼다(POST /api/me/region/swap).
+  Future<void> _pickArea() async {
+    final options = areaOptions(_region);
+    final items = widget.services.items;
+    final second = widget.services.session.user?.secondRegion;
+    final picked = await showModalBottomSheet<Object>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      backgroundColor: Sb.card,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('내 동네', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Sb.navy)),
+            const SizedBox(height: 4),
+            Text(
+                second == null
+                    ? '계정정보 > 동네 추가에서 동네를 하나 더 넣으면 여기서 바꿀 수 있어요(최대 2개).'
+                    : '추가한 동네를 누르면 그 동네 기준으로 홈과 동네지도가 바뀌어요.',
+                style: sbCaption),
+            const SizedBox(height: 8),
+            ListTile(
+              key: const ValueKey('region-current'),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              leading: Icon(Icons.place_rounded, color: Sb.mintText),
+              title: Text(_region.isEmpty ? '우리 동네' : _region,
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Sb.navy)),
+              subtitle: Text('지금 보는 동네', style: sbCaption),
+              trailing: Icon(Icons.check_rounded, color: Sb.mintText),
+            ),
+            if (second != null)
+              ListTile(
+                key: const ValueKey('region-second'),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                leading: Icon(Icons.place_outlined, color: Sb.text3),
+                title: Text(second, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Sb.navy)),
+                subtitle: Text('추가한 동네 · 눌러서 이 동네로 바꾸기', style: sbCaption),
+                trailing: Icon(Icons.swap_horiz_rounded, color: Sb.mintText),
+                onTap: () => Navigator.of(context).pop(_swapRegion),
+              )
+            else
+              ListTile(
+                key: const ValueKey('region-add'),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                leading: Icon(Icons.add_location_alt_outlined, color: Sb.mintText),
+                title: Text('동네 추가하기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Sb.mintText)),
+                onTap: () => Navigator.of(context).pop(_addRegion),
+              ),
+            Divider(height: 24, color: Sb.line),
+            Text('어디까지 볼까요?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Sb.navy)),
+            const SizedBox(height: 4),
+            Text('고른 범위 안의 물건만 홈 목록과 AI 추천에 보여 드려요.', style: sbCaption),
+            const SizedBox(height: 12),
+            for (final o in options)
+              ListTile(
+                key: ValueKey('area-${o.level.name}'),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                leading: Icon(
+                    o.level == _scope.level ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                    color: o.level == _scope.level ? Sb.mintText : Sb.text3),
+                title: Text(o.label, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Sb.navy)),
+                subtitle: Text(o.kind, style: sbCaption),
+                trailing: FutureBuilder<int>(
+                  future: items.count(area: o.area),
+                  builder: (context, snap) => Text(
+                    snap.hasData ? '상품 ${snap.data}개' : (snap.hasError ? '' : '…'),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Sb.mintText),
+                  ),
+                ),
+                onTap: () => Navigator.of(context).pop(o.level),
+              ),
+          ]),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    if (picked == _swapRegion) return _swapToSecond();
+    if (picked == _addRegion) {
+      await Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => RegionScreen(services: widget.services, second: true)));
+      return;
+    }
+    if (picked is! AreaLevel) return;
+    setState(() {
+      _level = picked;
+      _load();
+    });
+    widget.services.session.store.write(_areaKey, picked.name).catchError((Object _) {});
+  }
+
+  /// 지금 동네 ↔ 추가한 동네(서버가 바꾸고, 홈 · 동네지도 · 계정정보가 새 동네로 다시 그린다)
+  Future<void> _swapToSecond() async {
+    try {
+      final me = await widget.services.auth.swapRegion();
+      widget.services.itemsChanged.value++;
+      if (mounted) showSnack(context, '\'${me.user.region}\'(으)로 바꿨어요.');
+    } on ApiException catch (e) {
+      if (mounted) showSnack(context, e.message, error: true);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _load();
     widget.services.itemsChanged.addListener(_onChanged);
     _loadHistory();
+    _loadArea();
   }
 
   Future<void> _loadHistory() async {
@@ -122,9 +257,12 @@ class _FeedScreenState extends State<FeedScreen> {
 
   void _load() {
     final items = widget.services.items;
-    _future = _mode == _Mode.recommended
-        ? items.feed().then<Object>((v) => v)
-        : items.latest(category: _category, q: _query).then<Object>((v) => v);
+    final area = _scope.area;
+    // 인터넷이 없거나 약하면 15초 동안 '불러오는 중'을 유지한 뒤 '화면을 불러오지 못했어요'(OfflineView)
+    _future = holdNetworkError(_mode == _Mode.recommended
+        ? items.feed(area: area).then<Object>((v) => v)
+        : items.latest(category: _category, q: _query, area: area).then<Object>((v) => v));
+    _countFuture = items.count(area: area);
   }
 
   Future<void> _refresh() async {
@@ -187,7 +325,7 @@ class _FeedScreenState extends State<FeedScreen> {
               )
             : InkWell(
                 borderRadius: BorderRadius.circular(8),
-                onTap: () => showSnack(context, '내 동네: $region'),
+                onTap: _pickArea, // 범위 고르기(내 동네 · 시 · 도 · 전국)
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(
@@ -196,6 +334,12 @@ class _FeedScreenState extends State<FeedScreen> {
                       Icon(Icons.place_rounded, size: 20, color: Sb.mintText),
                       const SizedBox(width: 4),
                       Text(dong, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                      // 지금 범위(내 동네면 따로 안 씀): '망원동 · 전국 ▾'
+                      if (_scope.level != AreaLevel.dong) ...[
+                        const SizedBox(width: 6),
+                        Text('· ${_scope.label}',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Sb.text2)),
+                      ],
                       Icon(Icons.keyboard_arrow_down_rounded, color: Sb.text2),
                     ],
                   ),
@@ -240,6 +384,24 @@ class _FeedScreenState extends State<FeedScreen> {
               child: CustomScrollView(
                 slivers: [
                   SliverToBoxAdapter(child: _chipBar()),
+                  // 지금 범위 안의 물건 수: '📍 마포구 · 상품 20개' (범위를 바꾸면 숫자가 바뀐다)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
+                      child: FutureBuilder<int>(
+                        future: _countFuture,
+                        builder: (context, snap) => Row(children: [
+                          Icon(Icons.place_outlined, size: 15, color: Sb.mintText),
+                          const SizedBox(width: 4),
+                          Text(
+                            snap.hasData ? '${_scope.label} · 상품 ${snap.data}개' : _scope.label,
+                            key: const ValueKey('area-count'),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Sb.mintText),
+                          ),
+                        ]),
+                      ),
+                    ),
+                  ),
                   FutureBuilder<Object>(
                     future: _future,
                     builder: (context, snap) {
@@ -247,8 +409,12 @@ class _FeedScreenState extends State<FeedScreen> {
                         return const SliverFillRemaining(child: LoadingView());
                       }
                       if (snap.hasError) {
+                        final e = snap.error!;
                         return SliverFillRemaining(
-                          child: ErrorView(error: snap.error!, onRetry: () => setState(_load)),
+                          hasScrollBody: false,
+                          child: e is ApiException && e.isNetwork
+                              ? OfflineView(onRetry: () => setState(_load))
+                              : ErrorView(error: e, onRetry: () => setState(_load)),
                         );
                       }
                       final data = snap.data!;
@@ -487,7 +653,9 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
           footer: ReasonChips(
             rec.reasons,
-            max: 2,
+            // 첫 이유(민트 칩)만 보여 준다. 아래 회색 칩('내 ○○와 비슷한 가격')은 지움(2026-10-22 사용자 요청) —
+            // 전체 이유는 오른쪽 점수를 누르면 나오는 '왜 추천됐나요?' 시트에 그대로 있다
+            max: 1,
             extra: [
               if (rec.requestStatus == 'REQUESTED')
                 Pill('교환 요청 보냄', color: Sb.greenSoft, textColor: Sb.green, bold: true),

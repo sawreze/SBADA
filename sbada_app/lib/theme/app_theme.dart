@@ -26,12 +26,18 @@ class SbPalette {
     required this.glassButton,
     required this.glassShadow,
     required this.pinFill,
+    required this.groupedBg,
+    required this.groupCard,
+    required this.tabSelected,
   });
 
   final bool dark;
   final Color navy, text2, text3, line, bg, base, card, chip;
   final Color blueSoft, mintText, green, greenSoft, red, orange;
   final Color glassFill, glassStroke, glassHighlight, glassBar, glassButton, glassShadow, pinFill;
+
+  /// 묶음 카드 화면(계정정보 · 앱 설정): 바탕 / 카드 / 하단 탭바의 선택 칸
+  final Color groupedBg, groupCard, tabSelected;
 
   static const darkMode = SbPalette(
     dark: true,
@@ -56,6 +62,9 @@ class SbPalette {
     glassButton: Color(0x40202329),
     glassShadow: Color(0x66000000),
     pinFill: Color(0xE62A2D34),
+    groupedBg: Color(0xFF111215), // = base(다크는 예전 그대로)
+    groupCard: Color(0xFF1A1C20), // = card
+    tabSelected: Color(0x24FFFFFF), // 유리 탭바 위 흰 빛 알약
   );
 
   static const lightMode = SbPalette(
@@ -82,6 +91,11 @@ class SbPalette {
     glassButton: Color(0xD9FFFFFF),
     glassShadow: Color(0x2E000000),
     pinFill: Color(0xF2FFFFFF),
+    // 화이트 모드 계정정보(2026-10-22 사용자 요청): 연회색 바탕 위 흰 카드
+    groupedBg: Color(0xFFF2F4F6),
+    groupCard: Color(0xFFFFFFFF),
+    // 화이트 모드 하단 탭바(당근 스타일): 흰 캡슐 안 선택 칸 = 회색 둥근 배경
+    tabSelected: Color(0xFFECEEF1),
   );
 }
 
@@ -130,6 +144,11 @@ class Sb {
   static Color get glassButton => p.glassButton;
   static Color get glassShadow => p.glassShadow;
   static Color get pinFill => p.pinFill;
+
+  /// 묶음 카드 화면(계정정보 · 앱 설정) 바탕 · 카드, 하단 탭바 선택 칸
+  static Color get groupedBg => p.groupedBg;
+  static Color get groupCard => p.groupCard;
+  static Color get tabSelected => p.tabSelected;
 
   static const radius = 20.0;
   static const gap = 16.0;

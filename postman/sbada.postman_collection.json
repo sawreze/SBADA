@@ -66,7 +66,7 @@
           }
         },
         {
-          "name": "지도 설정(카카오 JS 키)",
+          "name": "지도 설정(OpenStreetMap · 키 없음)",
           "event": [
             {
               "listen": "test",
@@ -74,8 +74,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
-                  "pm.test('provider = kakao', () => pm.expect(pm.response.json().provider).to.eql('kakao'));",
-                  "pm.test('지도 키 설정됨(configured=true)', () => pm.expect(pm.response.json().configured).to.eql(true));"
+                  "pm.test('provider = osm 또는 kakao', () => pm.expect(['osm', 'kakao']).to.include(pm.response.json().provider));",
+                  "pm.test('지도 사용 가능(configured=true)', () => pm.expect(pm.response.json().configured).to.eql(true));"
                 ]
               }
             }
@@ -1644,7 +1644,609 @@
       ]
     },
     {
-      "name": "5. 정리(테스트 물건 내리기)",
+      "name": "5. 이번에 추가한 기능(동네 2개 · 알림 설정 · AI 요약 · 기기 토큰)",
+      "item": [
+        {
+          "name": "내 동네를 망원동으로(준비)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/region",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "region"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"region\": \"마포구 망원동\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "동네 추가 — 지금 동네와 같으면 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 400', () => pm.response.to.have.status(400));",
+                  "pm.test('오류 코드 SAME_REGION', () => pm.expect(pm.response.json().code).to.eql('SAME_REGION'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/second-region",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "second-region"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"region\": \"마포구 망원동\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "동네 추가(합정동)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('추가한 동네 = 합정동', () => pm.expect(pm.response.json().user.secondRegion).to.eql('마포구 합정동'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/second-region",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "second-region"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"region\": \"마포구 합정동\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "동네 바꾸기(홈 왼쪽 위)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const u = pm.response.json().user;",
+                  "pm.test('지금 동네 ↔ 추가한 동네', () => { pm.expect(u.region).to.eql('마포구 합정동'); pm.expect(u.secondRegion).to.eql('마포구 망원동'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/region/swap",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "region",
+                "swap"
+              ]
+            }
+          }
+        },
+        {
+          "name": "추가한 동네 지우기",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('추가한 동네 없음', () => pm.expect(pm.response.json().user.secondRegion).to.eql(null));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/second-region",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "second-region"
+              ]
+            }
+          }
+        },
+        {
+          "name": "동네 바꾸기 — 추가한 동네 없음 → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 409', () => pm.response.to.have.status(409));",
+                  "pm.test('오류 코드 NO_SECOND_REGION', () => pm.expect(pm.response.json().code).to.eql('NO_SECOND_REGION'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/region/swap",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "region",
+                "swap"
+              ]
+            }
+          }
+        },
+        {
+          "name": "알림 설정 보기 — 기본 모두 켜짐",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test('찜 · 채팅 · 교환 = true', () => { pm.expect(s.like).to.eql(true); pm.expect(s.chat).to.eql(true); pm.expect(s.exchange).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notification-settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notification-settings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "알림 끄기(채팅만)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test('채팅만 꺼짐', () => { pm.expect(s.chat).to.eql(false); pm.expect(s.like).to.eql(true); pm.expect(s.exchange).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notification-settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notification-settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "알림 설정 — 토큰 없음 → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notification-settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notification-settings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "찜하기(민지 → 테스트 계정 물건)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('찜함', () => pm.expect(pm.response.json().liked).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMinji}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{newItemId}}/like",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{newItemId}}",
+                "like"
+              ]
+            }
+          }
+        },
+        {
+          "name": "찜 알림이 주인 알림함에 있음",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ITEM_LIKED 알림', () => pm.expect(pm.response.json().notifications.some(n => n.type === 'ITEM_LIKED')).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            }
+          }
+        },
+        {
+          "name": "AI 상품 요약(Gemma, 처음 30초 안팎)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('요약 문장 있음', () => pm.expect(j.summary.length).to.be.above(5));",
+                  "pm.test('provider 값', () => pm.expect(['google', 'ollama', 'fallback']).to.include(j.provider));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenMinji}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{newItemId}}/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{newItemId}}",
+                "summary"
+              ]
+            }
+          }
+        },
+        {
+          "name": "AI 상품 요약 — 토큰 없음 → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{newItemId}}/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{newItemId}}",
+                "summary"
+              ]
+            }
+          }
+        },
+        {
+          "name": "푸시 기기 토큰 등록",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 200', () => pm.response.to.have.status(200));",
+                  "pm.test('등록됨', () => pm.expect(pm.response.json().registered).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/devices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "devices"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"postman-test-fcm-token\",\n  \"platform\": \"android\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "푸시 기기 토큰 지우기(로그아웃)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('상태 코드 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenNew}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/devices/remove",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "devices",
+                "remove"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"postman-test-fcm-token\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. 정리(테스트 물건 내리기)",
       "item": [
         {
           "name": "물건 내리기(주인)",

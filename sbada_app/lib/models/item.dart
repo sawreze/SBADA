@@ -128,3 +128,20 @@ class ItemSummary {
         ownerId: optInt(j, 'ownerId') ?? 0,
       );
 }
+
+/// AI 상품 요약(상세 화면 '거래 희망 장소' 지도 위). provider: google · ollama · fallback(AI 없이 만든 기본 요약)
+class AiItemSummary {
+  const AiItemSummary({required this.summary, required this.provider, this.cached = false});
+
+  final String summary;
+  final String provider;
+  final bool cached;
+
+  bool get byAi => provider != 'fallback';
+
+  factory AiItemSummary.fromJson(Map<String, dynamic> j) => AiItemSummary(
+        summary: '${j['summary'] ?? ''}',
+        provider: '${j['provider'] ?? 'fallback'}',
+        cached: j['cached'] == true,
+      );
+}

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/item.dart';
 import '../theme/app_theme.dart';
 import '../util/format.dart';
+import 'common.dart';
 import 'net_image.dart';
 
 /// 목록의 물건 한 줄(디자인 '홈' 시안):
@@ -58,8 +59,8 @@ class ItemTile extends StatelessWidget {
                 Text('$dong · ${timeAgo(item.createdAt)}',
                     style: sbCaption, maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Text('AI ${formatWon(item.price)}',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Sb.navy)),
+                PriceText(item.price), // '12,000원 AI 분석 가치'
+
                 // 정든 물건에게 보내는 메시지가 있으면 가격 아래 칩(추천 이유 등) 대신 "메시지" 를 굵게
                 if (item.farewellMessage != null && item.farewellMessage!.isNotEmpty) ...[
                   const SizedBox(height: 6),

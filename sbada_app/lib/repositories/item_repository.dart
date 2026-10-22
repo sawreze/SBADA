@@ -10,15 +10,22 @@ class ItemRepository {
 
   final ApiClient api;
 
-  /// 나를 위한 추천(선호도·가격적합도·신선도·인기도)
-  Future<FeedResult> feed({int limit = 30}) async =>
-      FeedResult.fromJson(await api.get('/api/feed', query: {'limit': '$limit'}) as Map<String, dynamic>);
+  /// 나를 위한 추천(선호도·가격적합도·신선도·인기도). area: 홈 왼쪽 위 범위(util/area_scope.dart, null = 전국)
+  Future<FeedResult> feed({int limit = 30, String? area}) async => FeedResult.fromJson(
+      await api.get('/api/feed', query: {'limit': '$limit', 'area': ?area}) as Map<String, dynamic>);
+
+  /// 범위 안 물건 수 GET /api/items/count (area null = 전국)
+  Future<int> count({String? area}) async {
+    final json = await api.get('/api/items/count', query: {'area': ?area}, auth: false) as Map<String, dynamic>;
+    return (json['count'] as num).toInt();
+  }
 
   /// 최신 목록(공개). 목록 응답은 {"items": [...]} 이므로 items 를 꺼낸다(10장 3.1)
   /// q: 물건 이름 · 동네(주소) · 초성 검색(서버 HangulSearch). limit: 검색창 추천 목록처럼 몇 개만 필요할 때
-  Future<List<Item>> latest({String? category, String? q, int? limit}) async {
+  Future<List<Item>> latest({String? category, String? q, int? limit, String? area}) async {
     final json = await api.get('/api/items', query: {
       'category': ?category,
+      'area': ?area,
       if (q != null && q.isNotEmpty) 'q': q,
       if (limit != null) 'limit': '$limit',
     }) as Map<String, dynamic>;
@@ -44,6 +51,10 @@ class ItemRepository {
     final json = await api.get('/api/me/items') as Map<String, dynamic>;
     return (json['items'] as List).map((e) => Item.fromJson(e as Map<String, dynamic>)).toList();
   }
+
+  /// AI 상품 요약(GET /api/items/{id}/summary). 처음 한 번은 Gemma 가 쓰느라 30초 안팎 → 100초까지 기다린다
+  Future<AiItemSummary> summary(int itemId) async => AiItemSummary.fromJson(
+      await api.get('/api/items/$itemId/summary', timeout: const Duration(seconds: 100)) as Map<String, dynamic>);
 
   /// 내 물건과 비슷한 가격대의 교환 후보
   Future<MatchResult> matches(int itemId, {int limit = 20}) async => MatchResult.fromJson(

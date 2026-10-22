@@ -3,6 +3,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+ 알림 표시 권한(실행 중에 사용자에게 묻는다) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- GPS 로 내 동네 찾기(동네 이름만 쓰므로 대략적인 위치면 충분, 정확한 위치는 사용자가 고르면) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <application
         android:label="스바다"

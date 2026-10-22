@@ -29,7 +29,7 @@ import com.sbada.user.AppUserRepository;
  *  - 람다 DSL: .csrf(c -> c.disable()) 처럼 '설정 객체를 받아 바꾸는 함수'를 넘겨 설정한다.
  *
  *  ▶ 주소별 접근 규칙 (위에서부터 처음 맞는 규칙이 적용된다)
- *    공개(permitAll)     /, /error, /api/health, /api/auth/signup·login·kakao, /ws(WebSocket — 토큰은 JwtHandshakeInterceptor 가 따로 검사)
+ *    공개(permitAll)     /, /error, /api/health, /api/auth/signup·login·kakao, GET /api/geo/reverse(로그인 전 온보딩의 GPS 동네 찾기), /ws(WebSocket — 토큰은 JwtHandshakeInterceptor 가 따로 검사)
  *                        POST /api/auth/signup, POST /api/auth/login
  *                        GET  /api/items, /api/items/{id}, /api/categories, /api/images/{id},
  *                             /api/ai/status, /api/config/map
@@ -83,7 +83,7 @@ public class SecurityConfig {
                             .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/kakao").permitAll()
                             .requestMatchers(HttpMethod.GET, // ← 이 줄의 주소들은 GET 방식일 때만 공개
                                     "/api/items", "/api/items/*", "/api/categories",
-                                    "/api/images/*", "/api/ai/status", "/api/config/map").permitAll()
+                                    "/api/images/*", "/api/ai/status", "/api/config/map", "/api/geo/reverse").permitAll()
                             .requestMatchers("/api/**").authenticated() // 나머지 API 는 로그인(토큰) 필요
                             .anyRequest().denyAll();                    // 그 밖의 주소는 모두 거절
                 })

@@ -8,7 +8,7 @@ import '../theme/app_theme.dart';
 ///   │ ◎  내 동네 설정            > │
 ///   │ ⚙  앱 설정                 > │
 ///   └─────────────────────────────┘
-/// 다크: 카드 #1A1C20 / 화이트: 옅은 회색(bg) — 바탕과 구분된다.
+/// 다크: 카드 #1A1C20 / 화이트: 흰 카드(바탕은 연회색 Sb.groupedBg) — 바탕과 구분된다.
 class SettingsGroup extends StatelessWidget {
   const SettingsGroup({super.key, this.title, required this.children});
 
@@ -20,7 +20,7 @@ class SettingsGroup extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(color: Sb.isDark ? Sb.card : Sb.bg, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: Sb.groupCard, borderRadius: BorderRadius.circular(16)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (title != null)
           Padding(

@@ -40,9 +40,14 @@ const Map<String, LatLng> dongCenters = {
 /// 동네를 모를 때의 기준점(마포구청 근처)
 const mapoCenter = LatLng(37.5663, 126.9019);
 
+/// GPS 로 찾은 동네의 실제 좌표(services/dong_finder.dart 가 채움, 이 기기에만 저장). 동네 목록보다 먼저 쓴다
+final Map<String, LatLng> gpsRegionCenters = {};
+
 /// '서울 마포구 망원동' → 망원동 중심 좌표. 모르는 동네는 이름으로 정한 고정 위치(마포구 근처).
 LatLng dongLatLng(String region) {
   final r = region.trim();
+  final gps = gpsRegionCenters[r];
+  if (gps != null) return gps;
   final full = regionCenters[r];
   if (full != null) return full; // 전국 동네(V9): '부산 해운대구 우동' 처럼 지역 전체 이름으로 찾는다
   final near = _nearestKnown(r);

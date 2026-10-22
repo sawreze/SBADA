@@ -155,16 +155,38 @@ public class ItemService {
      * 초성 · 동네 비교는 SQL LIKE 로 할 수 없어서, 교환 가능한 물건을 최신순으로 읽은 뒤 자바에서 거른다(시연 규모라 충분히 빠름).
      */
     @Transactional(readOnly = true)
-    public ItemDtos.ItemList list(String category, String q, int limit) {
+    public ItemDtos.ItemList list(String category, String q, String area, int limit) {
         Category c = category == null || category.isBlank() ? null : Category.parseStrict(category);
         String query = q == null || q.isBlank() ? null : q.trim();
+        String inArea = cleanArea(area);
         List<Item> found = query == null
-                ? items.search(ItemStatus.AVAILABLE, c, null, PageRequest.of(0, limit))
-                : items.search(ItemStatus.AVAILABLE, c, null, PageRequest.of(0, SEARCH_SCAN)).stream()
+                ? items.search(ItemStatus.AVAILABLE, c, null, inArea, PageRequest.of(0, limit))
+                : items.search(ItemStatus.AVAILABLE, c, null, inArea, PageRequest.of(0, SEARCH_SCAN)).stream()
                         .filter(i -> HangulSearch.matches(query, i.getTitle(), i.getOwner().getRegion()))
                         .limit(limit)
                         .toList();
         return new ItemDtos.ItemList(found.stream().map(ItemDtos.ItemView::from).toList());
+    }
+
+    /** 범위 안의 교환 가능한 물건 수(GET /api/items/count). area 가 없으면 전국 */
+    @Transactional(readOnly = true)
+    public long count(String area) {
+        return items.countInArea(ItemStatus.AVAILABLE, cleanArea(area));
+    }
+
+    /** 범위 글자 정리: 앞뒤 · 겹친 공백 정리, 빈 값 · '전국'이면 null(= 거르지 않음). LIKE 특수문자(% _)는 막는다 */
+    public static String cleanArea(String area) {
+        if (area == null) {
+            return null;
+        }
+        String a = area.trim().replaceAll("\\s+", " ");
+        if (a.isEmpty() || a.equals("전국")) {
+            return null;
+        }
+        if (a.contains("%") || a.contains("_") || a.length() > 40) {
+            throw ApiException.badRequest("INVALID_AREA", "범위 이름이 올바르지 않아요.");
+        }
+        return a;
     }
 
     /** 내 물건(GET /api/me/items) — 내린(HIDDEN) 물건만 빼고 */

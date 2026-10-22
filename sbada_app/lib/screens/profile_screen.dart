@@ -15,6 +15,7 @@ import 'likes_screen.dart';
 import 'login_screen.dart';
 import 'my_info_screen.dart';
 import 'my_items_screen.dart';
+import 'notification_settings_screen.dart';
 import 'notifications_screen.dart';
 import 'onboarding_screen.dart';
 import 'region_screen.dart';
@@ -118,7 +119,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // 화이트 모드: 연회색 바탕 + 흰 카드(다크는 예전 그대로)
+      backgroundColor: Sb.groupedBg,
       appBar: AppBar(
+        backgroundColor: Sb.groupedBg,
         title: const Text('계정정보'),
         actions: const [ThemeToggle(), SizedBox(width: 12)],
       ),
@@ -176,6 +180,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   trailing: CountBadge(widget.services.unreadNotifications),
                   onTap: () => _push(NotificationsScreen(services: widget.services)),
                 ),
+                // 찜 · 채팅 · 교환 알림 켜기/끄기 + 푸시(FCM/APNs) 상태
+                SettingsRow(
+                  key: const ValueKey('notification-settings'),
+                  icon: Icons.tune_outlined,
+                  label: '알림 설정',
+                  subtitle: '찜 · 채팅 · 교환 알림 켜기/끄기',
+                  onTap: () => _push(NotificationSettingsScreen(services: widget.services)),
+                ),
                 SettingsRow(
                   icon: Icons.tune_rounded,
                   label: '취향 다시 고르기',
@@ -187,6 +199,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   trailing: TrailingText(me.user.region.split(' ').last),
                   onTap: () => _push(RegionScreen(services: widget.services)),
                 ),
+                // 내 동네는 최대 2개: 하나 더 추가하는 칸(추가하면 홈 왼쪽 위에서 바꿀 수 있다)
+                me.user.secondRegion == null
+                    ? SettingsRow(
+                        key: const ValueKey('add-second-region'),
+                        icon: Icons.add_location_alt_outlined,
+                        label: '동네 추가',
+                        subtitle: '최대 2개 · 홈 왼쪽 위 동네 이름을 눌러 바꿔요',
+                        trailing: Icon(Icons.add_rounded, color: Sb.mintText),
+                        showChevron: false,
+                        onTap: () => _push(RegionScreen(services: widget.services, second: true)),
+                      )
+                    : SettingsRow(
+                        key: const ValueKey('second-region'),
+                        icon: Icons.add_location_alt_outlined,
+                        label: '추가한 동네',
+                        subtitle: '홈 왼쪽 위 동네 이름을 눌러 바꿔요',
+                        trailing: TrailingText(me.user.secondRegion!.split(' ').last),
+                        onTap: () => _push(RegionScreen(services: widget.services, second: true)),
+                      ),
                 SettingsRow(
                   icon: Icons.settings_outlined,
                   label: '앱 설정',
@@ -227,7 +258,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Sb.isDark ? Sb.card : Sb.bg, borderRadius: Sb.r),
+      decoration: BoxDecoration(color: Sb.groupCard, borderRadius: Sb.r),
       child: Row(children: [
         // 프로필 사진(없으면 닉네임 첫 글자) + 오른쪽 아래 카메라 버튼
         Semantics(
@@ -271,8 +302,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     height: 24,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Sb.isDark ? Sb.chip : Sb.base,
-                      border: Border.all(color: Sb.isDark ? Sb.card : Sb.bg, width: 2),
+                      color: Sb.isDark ? Sb.chip : Sb.bg,
+                      border: Border.all(color: Sb.groupCard, width: 2),
                     ),
                     child: Icon(Icons.photo_camera_rounded, size: 13, color: Sb.navy),
                   ),

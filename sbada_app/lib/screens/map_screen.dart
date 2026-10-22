@@ -391,8 +391,7 @@ class _MapScreenState extends State<MapScreen> {
                   Text('${item.owner.region.split(' ').last} · ${_distanceLabel(_km(item))}', style: sbCaption),
                   const SizedBox(height: 4),
                   Row(children: [
-                    Text(formatWon(item.price),
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Sb.navy)),
+                    PriceText(item.price),
                     if (_scores[item.id] != null) ...[
                       const SizedBox(width: 8),
                       Text('매치 ${_scores[item.id]}%',

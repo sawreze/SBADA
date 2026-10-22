@@ -6,6 +6,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// FCM 푸시 설정 파일(Firebase 콘솔 > 프로젝트 설정 > Android 앱 com.sbada.sbada > google-services.json)을
+// android/app/ 에 넣으면 Google 서비스 플러그인이 켜진다. 비밀값이 들어 있어 Git 에는 안 올린다(.gitignore).
+// 파일이 없으면 플러그인을 건너뛰어 빌드는 그대로 되고, 앱은 푸시 없이(WebSocket 알림만) 동작한다.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // 카카오 네이티브 앱 키: Git 에 올라가지 않는 android/local.properties 의 kakao.nativeAppKey (또는 환경 변수 KAKAO_NATIVE_APP_KEY)
 // → AndroidManifest 의 ${kakaoNativeAppKey} 자리에 들어간다(로그인 후 돌아올 주소 kakao{키}://oauth 와 MainActivity 전달용)
 val localProps = Properties().apply {

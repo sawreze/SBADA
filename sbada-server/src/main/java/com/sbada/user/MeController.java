@@ -10,7 +10,9 @@ import java.util.Set;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,6 +31,9 @@ import jakarta.validation.Valid;
  * └──────────────────────────────────────────────────────────┘
  *  GET /api/me              → 내 정보 + 카테고리 선호도 + 키워드 + 가격대
  *  PUT /api/me/preferences  → 온보딩에서 고른 취향 저장(다시 보내면 덮어씀)
+ *  PUT /api/me/region       → 내 동네 바꾸기
+ *  PUT · DELETE /api/me/second-region → 동네 하나 더 추가 · 지우기(최대 2개, V13)
+ *  POST /api/me/region/swap → 지금 동네 ↔ 추가한 동네 바꾸기(홈 왼쪽 위)
  *  (내 물건 목록 GET /api/me/items 는 ItemController 에 있다)
  *
  * [프로그래밍 설명 — '로그인한 사용자'를 받는 법]
@@ -135,6 +140,53 @@ public class MeController {
         AppUser user = users.findById(userId)
                 .orElseThrow(() -> new ApiException(401, "TOKEN_INVALID", "사용자를 확인할 수 없습니다."));
         user.changeRegion(input.region());
+        users.save(user);
+        return me(auth);
+    }
+
+    /**
+     * ■ 동네 하나 더 추가   PUT /api/me/second-region   (🔒)   계정정보 > 동네 추가
+     *   내 동네는 최대 2개. 이미 두 번째 동네가 있으면 새 값으로 바꾼다.
+     * 요청 본문 — UserDtos.RegionRequest   {"region": "마포구 합정동"}   (필수, 20자 이하)
+     * 응답 200 — MeView (user.secondRegion 이 바뀜)
+     * 오류: 400 VALIDATION_FAILED · SAME_REGION(지금 동네와 같음), 401
+     */
+    @PutMapping("/second-region")
+    public UserDtos.MeView changeSecondRegion(@Valid @RequestBody UserDtos.RegionRequest input, Authentication auth) {
+        AppUser user = requireMe(auth);
+        if (input.region().trim().equals(user.getRegion())) {
+            throw ApiException.badRequest("SAME_REGION", "지금 동네와 같은 동네예요.");
+        }
+        user.changeSecondRegion(input.region());
+        users.save(user);
+        return me(auth);
+    }
+
+    /**
+     * ■ 추가한 동네 지우기   DELETE /api/me/second-region   (🔒)
+     * 응답 200 — MeView (user.secondRegion = null). 원래 없어도 200(여러 번 눌러도 결과 같음)
+     */
+    @DeleteMapping("/second-region")
+    public UserDtos.MeView deleteSecondRegion(Authentication auth) {
+        AppUser user = requireMe(auth);
+        user.changeSecondRegion(null);
+        users.save(user);
+        return me(auth);
+    }
+
+    /**
+     * ■ 동네 바꾸기   POST /api/me/region/swap   (🔒)   홈 왼쪽 위 동네 이름 → 시트에서 다른 동네 누르기
+     *   지금 동네(region)와 추가한 동네(secondRegion)를 서로 바꾼다. 홈 목록 · 동네지도 · 범위(시 · 구 · 도)가 새 동네 기준이 된다.
+     * 응답 200 — MeView
+     * 오류: 409 NO_SECOND_REGION(추가한 동네 없음), 401
+     */
+    @PostMapping("/region/swap")
+    public UserDtos.MeView swapRegion(Authentication auth) {
+        AppUser user = requireMe(auth);
+        if (user.getSecondRegion() == null) {
+            throw ApiException.conflict("NO_SECOND_REGION", "추가한 동네가 없어요. 계정정보에서 동네를 하나 더 추가해 주세요.");
+        }
+        user.swapRegions();
         users.save(user);
         return me(auth);
     }

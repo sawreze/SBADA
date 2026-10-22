@@ -25,6 +25,7 @@ import com.sbada.exchange.ExchangeStatus;
 import com.sbada.item.Item;
 import com.sbada.item.ItemDtos;
 import com.sbada.item.ItemRepository;
+import com.sbada.item.ItemService;
 import com.sbada.item.ItemStatus;
 import com.sbada.notification.NotificationService;
 import com.sbada.notification.NotificationType;
@@ -194,9 +195,16 @@ public class RecommendationService {
      */
     @Transactional(readOnly = true)
     public RecommendDtos.FeedResult feed(long userId, int limit) {
+        return feed(userId, limit, null);
+    }
+
+    /** area = 홈 왼쪽 위에서 고른 범위('서울 마포구 망원동' · '서울 마포구' · '서울', null = 전국). 그 안의 물건만 후보 */
+    @Transactional(readOnly = true)
+    public RecommendDtos.FeedResult feed(long userId, int limit, String area) {
         AppUser me = users.findById(userId)
                 .orElseThrow(() -> new ApiException(401, "TOKEN_INVALID", "사용자를 확인할 수 없습니다."));
-        List<Item> candidates = items.findOthers(ItemStatus.AVAILABLE, userId, PageRequest.of(0, CANDIDATE_LIMIT));
+        List<Item> candidates = items.findOthers(ItemStatus.AVAILABLE, userId, ItemService.cleanArea(area),
+                PageRequest.of(0, CANDIDATE_LIMIT));
         List<Item> myItems = items.findMine(userId, ItemStatus.HIDDEN).stream()
                 .filter(i -> i.getStatus() == ItemStatus.AVAILABLE).toList();
         Map<Category, Double> myPrefs = preferences.weightsOf(userId);

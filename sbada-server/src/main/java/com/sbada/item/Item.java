@@ -119,6 +119,13 @@ public class Item {
     @Column(name = "farewell_message", length = 60)
     private String farewellMessage;
 
+    /** AI 상품 요약(V15, 상세 화면 지도 위). 처음 볼 때 만들어 저장, 제목 · 설명을 고치면 지운다 */
+    @Column(name = "ai_summary", length = 500)
+    private String aiSummary;
+
+    @Column(name = "ai_summary_provider", length = 40)
+    private String aiSummaryProvider;
+
     /** 이 물건과 바꾸고 싶은 카테고리(등록자가 고름) */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "item_wish_categories", joinColumns = @JoinColumn(name = "item_id"))
@@ -181,6 +188,18 @@ public class Item {
         this.wishCategories.clear();
         this.wishCategories.addAll(wishCategories);
         this.updatedAt = Instant.now();
+        clearSummary(); // 글이 바뀌었으니 AI 요약도 다시 만든다
+    }
+
+    /** AI 상품 요약 저장(ItemSummaryService) */
+    public void saveSummary(String summary, String provider) {
+        this.aiSummary = summary;
+        this.aiSummaryProvider = provider;
+    }
+
+    public void clearSummary() {
+        this.aiSummary = null;
+        this.aiSummaryProvider = null;
     }
 
     public void markTraded() {

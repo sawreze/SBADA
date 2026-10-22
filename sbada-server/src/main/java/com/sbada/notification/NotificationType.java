@@ -17,5 +17,17 @@ public enum NotificationType {
     /** 새 채팅(알림 목록에는 저장하지 않고 실시간·푸시로만 보낸다) */
     CHAT_MESSAGE,
     /** 내가 올린 물건이 콘텐츠 검사(욕설 · 선정적 · 혐오)에 걸려 보류되었다(V7) */
-    ITEM_HELD
+    ITEM_HELD,
+    /** 누군가 내 물건을 찜했다(V14) */
+    ITEM_LIKED;
+
+    /** 계정정보 > 알림 설정의 어느 스위치에 속하는지: like · chat · exchange (그 밖의 알림은 항상 보냄 → null) */
+    public String settingKey() {
+        return switch (this) {
+            case ITEM_LIKED -> "like";
+            case CHAT_MESSAGE -> "chat";
+            case EXCHANGE_REQUESTED, EXCHANGE_ACCEPTED, EXCHANGE_REJECTED, EXCHANGE_CANCELED -> "exchange";
+            default -> null;
+        };
+    }
 }

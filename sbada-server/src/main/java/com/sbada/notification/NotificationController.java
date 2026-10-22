@@ -7,6 +7,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -104,5 +105,38 @@ public class NotificationController {
         service.registerDevice((Long) auth.getPrincipal(), input.token().trim(),
                 input.platform() == null ? "android" : input.platform());
         return ResponseEntity.ok(Map.of("registered", true, "fcmEnabled", service.fcmEnabled()));
+    }
+
+    /**
+     * ■ 기기 토큰 지우기   POST /api/devices/remove   (🔒)   로그아웃할 때
+     * 요청: {"token": "fcm-기기-토큰-문자열"} — 내 토큰일 때만 지운다(남의 토큰이면 아무 일 없음)
+     * 응답 204. 로그아웃한 폰에 이전 계정의 푸시가 오지 않게 한다.
+     */
+    @PostMapping("/api/devices/remove")
+    public ResponseEntity<Void> removeDevice(@Valid @RequestBody NotificationDtos.DeviceRequest input,
+                                             Authentication auth) {
+        service.unregisterDevice((Long) auth.getPrincipal(), input.token().trim());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * ■ 알림 설정 보기   GET /api/me/notification-settings   (🔒)   계정정보 > 알림 설정
+     * 응답 200 — {"like":true,"chat":true,"exchange":true,"pushReady":false}
+     */
+    @GetMapping("/api/me/notification-settings")
+    public NotificationDtos.NotificationSettings settings(Authentication auth) {
+        return service.settings((Long) auth.getPrincipal());
+    }
+
+    /**
+     * ■ 알림 켜기 / 끄기   PUT /api/me/notification-settings   (🔒)
+     * 요청: {"like":false}  (찜 · 채팅 · 교환 중 바꿀 것만)
+     * 응답 200 — 바뀐 전체 설정
+     * 끈 종류는 푸시(FCM/APNs)를 보내지 않고, 앱이 켜져 있을 때 배너도 띄우지 않는다(알림함 기록은 남음).
+     */
+    @PutMapping("/api/me/notification-settings")
+    public NotificationDtos.NotificationSettings changeSettings(@RequestBody NotificationDtos.SettingsRequest input,
+                                                                Authentication auth) {
+        return service.changeSettings((Long) auth.getPrincipal(), input);
     }
 }
