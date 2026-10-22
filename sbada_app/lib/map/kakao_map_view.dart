@@ -89,11 +89,23 @@ class _KakaoMapViewState extends State<KakaoMapView> {
   late final MapHost _host;
   bool _ready = false;
 
+  /// 이 지도가 보이는 탭인지(TickerMode). 숨으면 HTML 안의 애니메이션을 멈춘다
+  bool _active = true;
+
   @override
   void initState() {
     super.initState();
     widget.controller?._state = this;
     _host = MapHost(html: _html(), onMessage: _onMessage);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final on = TickerMode.valuesOf(context).enabled;
+    if (on == _active) return;
+    _active = on;
+    _js('setActive($on)');
   }
 
   @override
@@ -128,6 +140,7 @@ class _KakaoMapViewState extends State<KakaoMapView> {
         _ready = true;
         _js('setPins(${_pinsJson()})');
         if (widget.selectedId != null) _js('selectPin(${widget.selectedId})');
+        if (!_active) _js('setActive(false)');
       case 'tap':
         widget.onPinTap?.call((data['id'] as num).toInt());
       case 'mapTap':
@@ -170,6 +183,7 @@ $_pinJs
   var pinsData = [];
   function setPins(list){
     pinsData = list;
+    spinning = topSpin(list);
     if(!map) return;
     for (var k in overlays) overlays[k].setMap(null);
     overlays = {};
@@ -184,6 +198,7 @@ $_pinJs
       o.setMap(map);
       overlays[p.id] = o;
     });
+    applyActive();
   }
   function selectPin(id){
     selected = id;
@@ -233,8 +248,31 @@ $_pinJs
 
   /// 두 지도가 같이 쓰는 핀 그리기 함수(pinHtml)
   static const String _pinJs = r'''
+  // 화면에 안 보일 때(다른 탭) 핀 빛 회전(SVG 애니메이션)을 멈춘다 → 숨은 지도가 CPU 를 쓰지 않게
+  var active = true;
+  function applyActive(){
+    document.querySelectorAll('svg').forEach(function(s){
+      if (!s.pauseAnimations) return;
+      if (active) s.unpauseAnimations(); else s.pauseAnimations();
+    });
+  }
+  function setActive(on){ active = on; applyActive(); }
   // 물방울 핀(가로 64, 세로 88): 위쪽 원 + 꼭짓점으로 이어지는 두 접선 (앱의 MatchPin 과 같은 모양)
   var PIN = 'M32 88 L58.26 50.29 A32 32 0 1 0 5.74 50.29 Z';
+
+  // 빛 회전(SVG 애니메이션)은 매치도 상위 MAX_SPIN 개 + 선택한 핀만. 핀 50개가 전부 계속 돌면 지도 화면이
+  // 계속 다시 그려져 CPU 를 많이 쓴다(에뮬레이터 측정: 지도 화면 약 60%). 나머지 핀은 빛은 그대로, 멈춘 채로 그린다.
+  // 계속 돌면 핀 1개만 돌아도 지도 전체가 매 프레임 다시 그려진다(측정: 회전 5개 ≈ 50개 ≈ CPU 48%, 0개 = 0%).
+  // 그래서 나타날 때 · 눌러서 고를 때 SPIN_ROUNDS 바퀴만 돌고 멈춘다 → 가만히 보고 있으면 CPU 0%
+  var MAX_SPIN = 5, SPIN_ROUNDS = 2, spinning = {};
+  function topSpin(list){
+    var ids = {};
+    list.filter(function(p){ return !p.plain && (p.glow || 0) > 0; })
+        .sort(function(a, b){ return (b.glow || 0) - (a.glow || 0); })
+        .slice(0, MAX_SPIN)
+        .forEach(function(p){ ids[p.id] = true; });
+    return ids;
+  }
 
   function pinHtml(p){
     if (p.plain) {
@@ -244,10 +282,14 @@ $_pinJs
         + '<circle cx="32" cy="32" r="12" fill="#0D1F16"/></svg></div>';
     }
     var s = p.glow || 0;
+    var spin = s > 0 && (spinning[p.id] || p.id === selected);
     var fill = (p.id === selected) ? '#93E1B7' : 'rgba(42,45,52,.94)';
-    var glow = s > 0
+    // 도는 핀: 빛 두 겹 / 멈춘 핀: 빛 한 겹(지도를 움직일 때 그리는 비용을 줄임) / 점수 없는 핀: 그림자
+    var glow = spin
       ? 'filter:drop-shadow(0 0 '+(3+8*s).toFixed(1)+'px rgba(52,224,122,'+(0.35+0.6*s).toFixed(2)+'))'
          + ' drop-shadow(0 0 '+(1+3*s).toFixed(1)+'px rgba(185,255,210,'+(0.3+0.5*s).toFixed(2)+'));'
+      : s > 0
+      ? 'filter:drop-shadow(0 0 '+(2+6*s).toFixed(1)+'px rgba(52,224,122,'+(0.3+0.55*s).toFixed(2)+'));'
       : 'filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));';
     var gid = 'g' + p.id;
     var stroke = s > 0 ? 'url(#'+gid+')' : 'rgba(255,255,255,.25)';
@@ -258,7 +300,7 @@ $_pinJs
         + '<stop offset=".5" stop-color="#B9FFD2"/>'
         + '<stop offset=".55" stop-color="#34E07A"/>'
         + '<stop offset="1" stop-color="#34E07A" stop-opacity="'+(0.25*s).toFixed(2)+'"/>'
-        + '<animateTransform attributeName="gradientTransform" type="rotate" from="0 32 40" to="360 32 40" dur="'+p.period+'s" repeatCount="indefinite"/>'
+        + (spin ? '<animateTransform attributeName="gradientTransform" type="rotate" from="0 32 40" to="360 32 40" dur="'+p.period+'s" repeatCount="'+SPIN_ROUNDS+'" fill="freeze"/>' : '')
         + '</linearGradient></defs>'
       : '';
     var score = (p.score === null || p.score === undefined) ? '–' : (p.score + '%');
@@ -313,6 +355,7 @@ $_pinJs
   var pinsData = [];
   function setPins(list){
     pinsData = list;
+    spinning = topSpin(list);
     if(!map) return;
     for (var k in overlays) map.removeLayer(overlays[k]);
     overlays = {};
@@ -326,6 +369,7 @@ $_pinJs
       m.addTo(map);
       overlays[p.id] = m;
     });
+    applyActive();
   }
   function selectPin(id){
     selected = id;

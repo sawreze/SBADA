@@ -54,6 +54,8 @@ class Session extends ChangeNotifier {
   static const _userKey = 'sbada.user';
   static const onboardingDoneKey = 'sbada.onboarding_done';
   static const pendingPrefsKey = 'sbada.pending_prefs';
+  /// 처음 쓸 때 온보딩에서 고른 사는 동네(로그인 전) → 로그인 뒤 PUT /api/me/region
+  static const pendingRegionKey = 'sbada.pending_region';
 
   final KeyValueStore _store;
   String? _token;

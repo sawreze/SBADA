@@ -21,6 +21,9 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
+
+  /// 한 번이라도 연 탭만 만든다(앱 시작 때 지도 WebView 까지 한꺼번에 만들지 않게 — 시작 렉 줄이기)
+  final Set<int> _opened = {0};
   late final List<Widget> _pages;
   late final List<GlassTab> _tabs;
 
@@ -52,7 +55,10 @@ class _HomeShellState extends State<HomeShell> {
 
   void _select(int i) {
     final s = widget.services;
-    setState(() => _index = i);
+    setState(() {
+      _index = i;
+      _opened.add(i);
+    });
     if (i == 2) s.chatsChanged.value++; // 채팅 탭을 열 때마다 목록을 새로 읽는다
     s.refreshBadges();
   }
@@ -62,7 +68,12 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       // 목록이 유리 탭바 뒤로 비쳐 보이도록 몸통을 탭바 아래까지 늘린다
       extendBody: true,
-      body: IndexedStack(index: _index, children: _pages),
+      // 안 보이는 탭은 TickerMode 로 멈춘다: 애니메이션 · 동네지도 WebView(핀 빛 회전)가 뒤에서 계속 돌며
+      // CPU 를 쓰던 문제(홈에 있어도 지도 프로세스가 약 39%) 해결. 상태(스크롤 위치 등)는 IndexedStack 이 그대로 기억
+      body: IndexedStack(index: _index, children: [
+        for (var i = 0; i < _pages.length; i++)
+          _opened.contains(i) ? TickerMode(enabled: i == _index, child: _pages[i]) : const SizedBox.shrink(),
+      ]),
       floatingActionButton: _index == 0
           ? Padding(
               padding: const EdgeInsets.only(bottom: 4),

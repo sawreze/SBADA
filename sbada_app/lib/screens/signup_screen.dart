@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../network/api_exception.dart';
+import '../network/session.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import 'splash_gate.dart';
@@ -24,6 +25,15 @@ class _SignupScreenState extends State<SignupScreen> {
   ApiException? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // 처음 쓸 때 온보딩 ④에서 고른 사는 동네가 있으면 '동네' 칸에 미리 채운다
+    widget.services.session.store.read(Session.pendingRegionKey).then((r) {
+      if (mounted && r != null && r.trim().isNotEmpty) setState(() => _region.text = r.trim());
+    });
+  }
+
+  @override
   void dispose() {
     _username.dispose();
     _password.dispose();
@@ -45,6 +55,8 @@ class _SignupScreenState extends State<SignupScreen> {
         nickname: _nickname.text,
         region: _region.text,
       );
+      // 가입할 때 보낸 동네(미리 채운 값을 사용자가 고쳤을 수도 있음)가 최종 → 온보딩에서 남긴 값은 지운다
+      await widget.services.session.store.remove(Session.pendingRegionKey);
       if (!mounted) return;
       await AppFlow.afterLogin(context, widget.services);
     } on ApiException catch (e) {

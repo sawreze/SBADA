@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- 앱이 켜지는 순간(Flutter 가 첫 화면을 그리기 전) 화면: 아이콘 배경색 + 가운데 곰 · 손 그림(Android 11 이하).
+     Flutter 실행 화면(SplashGate · SwapLogo)과 같은 크기 · 같은 자리라 넘어갈 때 그림이 튀지 않는다.
+     splash_icon.png = 288dp 정사각형 안에 그림 가로 170dp -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+    <item android:drawable="@color/splash_bg" />
+    <item android:width="288dp" android:height="288dp" android:gravity="center" android:drawable="@drawable/splash_icon" />
 </layer-list>

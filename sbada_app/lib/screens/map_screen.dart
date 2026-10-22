@@ -247,7 +247,7 @@ class _MapScreenState extends State<MapScreen> {
                                 overflow: TextOverflow.ellipsis),
                           ),
                           if (items.isNotEmpty)
-                            Text('반경 ${_km(items.last).ceil().clamp(1, 99)}km',
+                            Text('반경 ${_km(items.last).ceil().clamp(1, 999)}km',
                                 style: TextStyle(color: Sb.text2, fontSize: 13, fontWeight: FontWeight.w600)),
                           const SizedBox(width: 16),
                         ]),

@@ -25,6 +25,7 @@ class Item {
     required this.owner,
     required this.viewCount,
     required this.requestCount,
+    this.likeCount = 0,
     required this.createdAt,
     this.moderationReason,
     this.farewellMessage,
@@ -53,6 +54,9 @@ class Item {
   final PublicUser owner;
   final int viewCount;
   final int requestCount;
+
+  /// 찜(하트) 수 — 서버가 item_likes 를 세서 내려 준다
+  final int likeCount;
   final DateTime createdAt;
 
   /// 보류 이유(HELD 일 때만)
@@ -87,6 +91,7 @@ class Item {
         owner: PublicUser.fromJson(j['owner'] as Map<String, dynamic>),
         viewCount: optInt(j, 'viewCount') ?? 0,
         requestCount: optInt(j, 'requestCount') ?? 0,
+        likeCount: optInt(j, 'likeCount') ?? 0,
         createdAt: parseTime(j['createdAt']),
         moderationReason: optStr(j, 'moderationReason'),
         farewellMessage: optStr(j, 'farewellMessage'),

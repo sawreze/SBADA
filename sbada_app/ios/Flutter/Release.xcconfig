@@ -1,0 +1,3 @@
+#include "Generated.xcconfig"
+// 비밀값(카카오 네이티브 앱 키): Secrets.xcconfig 는 Git 에 올리지 않는다. 없어도 빌드는 된다(카카오 로그인만 꺼짐)
+#include? "Secrets.xcconfig"

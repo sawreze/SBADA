@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
 import '../models/item.dart';
+import 'regions.dart';
+
+export 'regions.dart';
 
 /// 위도·경도 한 점
 class LatLng {
@@ -39,7 +42,12 @@ const mapoCenter = LatLng(37.5663, 126.9019);
 
 /// '서울 마포구 망원동' → 망원동 중심 좌표. 모르는 동네는 이름으로 정한 고정 위치(마포구 근처).
 LatLng dongLatLng(String region) {
-  final dong = region.trim().isEmpty ? '' : region.trim().split(' ').last;
+  final r = region.trim();
+  final full = regionCenters[r];
+  if (full != null) return full; // 전국 동네(V9): '부산 해운대구 우동' 처럼 지역 전체 이름으로 찾는다
+  final near = _nearestKnown(r);
+  if (near != null) return near; // 목록에 없는 동네: 같은 시·구(또는 시도) 동네 좌표
+  final dong = r.isEmpty ? '' : r.split(' ').last;
   final known = dongCenters[dong];
   if (known != null) return known;
   if (dong.isEmpty) return mapoCenter;
@@ -57,3 +65,29 @@ LatLng itemLatLng(Item item) {
   final dLng = meters * math.cos(angle) / (111000 * math.cos(c.lat * math.pi / 180));
   return LatLng(c.lat + dLat, c.lng + dLng);
 }
+
+/// '부산 해운대구 좌동' → '부산 해운대구 …' 동네 좌표, '해운대구 좌동' → '… 해운대구 …', '부산' → 부산 동네 하나.
+/// 서울 마포구 시연 동네('마포구 망원동')는 아래 dongCenters 로 찾으므로 여기서는 건너뛴다.
+LatLng? _nearestKnown(String region) {
+  final words = region.split(' ').where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty || dongCenters.containsKey(words.last)) return null;
+  final keys = regionCenters.keys;
+  for (final n in [2, 1]) {
+    if (words.length < n) continue;
+    final prefix = words.take(n).join(' ');
+    for (final k in keys) {
+      if (k == prefix || k.startsWith('$prefix ')) return regionCenters[k];
+    }
+  }
+  for (final k in keys) {
+    final parts = k.split(' ');
+    if (parts.length >= 3 && parts[1] == words.first) return regionCenters[k]; // 시도 없이 '수원시 …', '해운대구 …'
+  }
+  return null;
+}
+
+/// 동네 입력 후보: 전국 동네(regionCenters) + 서울 마포구 일대 시연 동네('마포구 망원동' 형식)
+List<String> knownRegions() => [
+      for (final d in dongCenters.keys) d == '연희동' ? '서대문구 $d' : '마포구 $d',
+      ...regionCenters.keys,
+    ];

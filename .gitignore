@@ -27,3 +27,11 @@ scripts/smoke-result.txt
 # 학습(Python 가상환경 · 결과물)
 training/.venv/
 training/out/
+
+# iOS 비밀값
+Secrets.xcconfig
+
+# 학습 결과물 · 파이썬 캐시(용량 큼)
+training/out-final/
+training/out-vision/
+__pycache__/

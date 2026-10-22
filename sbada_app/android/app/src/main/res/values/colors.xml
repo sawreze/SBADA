@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 실행 화면 배경 = 앱 아이콘 배경색. Flutter 쪽 Sb.splashBg 와 같은 값 -->
+    <color name="splash_bg">#83E8B1</color>
+</resources>

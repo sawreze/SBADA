@@ -80,7 +80,12 @@ class ItemTile extends StatelessWidget {
                     Icon(Icons.remove_red_eye_outlined, size: 15, color: Sb.text3),
                     const SizedBox(width: 3),
                     Text('${item.viewCount}', style: sbCaption),
+                    const SizedBox(width: 10),
                   ],
+                  // 찜(하트) 수: 0 이어도 자리를 보여 준다(눈 옆)
+                  Icon(Icons.favorite_border_rounded, size: 15, color: Sb.text3, semanticLabel: '찜'),
+                  const SizedBox(width: 3),
+                  Text('${item.likeCount}', style: sbCaption),
                 ]),
               ]),
             ),

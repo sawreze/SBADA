@@ -434,7 +434,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   String _providerLabel(String? p) => switch (p) {
         'google' => 'Gemma AI 가격 분석',
         'ollama' => 'Gemma AI 가격 분석(로컬)',
-        'seed' => '시연용 표본 가격',
+        'seed' => 'AI 가격 분석',
         _ => '기준가 추정(AI 미연결)',
       };
 

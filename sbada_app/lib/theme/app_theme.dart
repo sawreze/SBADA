@@ -103,6 +103,10 @@ class Sb {
   /// 포인트 색 위에 올리는 글자·아이콘(밝은 민트 위에서는 짙은 색이 잘 읽힌다)
   static const onAccent = Color(0xFF0D1F16);
 
+  /// 실행 화면 배경 = 앱 아이콘 배경색(assets/app_icon.png 에서 뽑음). 다크/화이트 모드와 상관없이 같다.
+  /// Android 첫 화면(res/values/colors.xml splash_bg)도 같은 값.
+  static const splashBg = Color(0xFF83E8B1);
+
   static Color get mintText => p.mintText;
   static Color get blueSoft => p.blueSoft;
   static Color get navy => p.navy;

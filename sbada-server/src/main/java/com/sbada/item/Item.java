@@ -29,6 +29,8 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import org.hibernate.annotations.Formula;
+
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -130,6 +132,10 @@ public class Item {
 
     private int viewCount;
     private int requestCount;
+
+    /** 찜(하트) 수. 테이블 열이 아니라 item_likes 를 세는 계산 값(@Formula, 읽기 전용) → 찜 표와 항상 맞고 DB 구조는 그대로 */
+    @Formula("(select count(*) from item_likes l where l.item_id = id)")
+    private int likeCount;
 
     @Column(nullable = false)
     private Instant createdAt;

@@ -46,16 +46,23 @@ class FlywayMigrationTest {
     @Test
     void migrationsCreateSchemaAndDemoData() {
         Integer applied = jdbc.queryForObject(
-                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8')",
+                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10')",
                 Integer.class);
-        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(8);
+        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(10);
+        // V2 시연 계정 4명 + V9 전국 판매자 135명
         org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("select count(*) from app_users", Integer.class))
-                .isEqualTo(4);
-        // V4: V2 의 표본 16개를 지우고 상품 50개(사진 50장)로 다시 만든다
+                .isEqualTo(139);
+        // V4: V2 의 표본 16개를 지우고 상품 50개(사진 50장)로 다시 만든다 + V9 전국 상품 500개 · V10 사진 500장
         org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("select count(*) from items", Integer.class))
-                .isEqualTo(50);
+                .isEqualTo(550);
         org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("select count(*) from item_images", Integer.class))
-                .isEqualTo(50);
+                .isEqualTo(550);
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "select count(*) from item_images where stored_name like 'seed-q%'", Integer.class)).isEqualTo(500);
+        // V9: 판매자가 인구 비례로 전국 17개 시도에 퍼져 있다
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "select count(distinct substring(region, 1, 2)) from app_users where username like 'nw%'", Integer.class))
+                .isEqualTo(17);
         org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
                 "select count(*) from item_images where stored_name like 'seed-p%'", Integer.class)).isEqualTo(50);
     }
@@ -82,10 +89,10 @@ class FlywayMigrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.unread").value(1));
 
-        // 추천 피드에는 남의 물건(50개 중 민지 것 12개를 뺀 38개)만 후보로 나온다
+        // 추천 피드 후보 = 남의 물건(550개 중 민지 것 12개를 뺀 538개) 중 최대 300개(서버가 추천 후보 수를 300개로 제한)
         mvc.perform(get("/api/feed").header("Authorization", bearer))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.candidates").value(38))
+                .andExpect(jsonPath("$.candidates").value(300))
                 .andExpect(jsonPath("$.items.length()", greaterThan(0)));
 
         // 채팅방에는 교환 제안 메시지가 있고, 민지 입장에서 안 읽은 1개

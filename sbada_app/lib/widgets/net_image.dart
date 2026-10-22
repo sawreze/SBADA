@@ -31,6 +31,9 @@ class NetImage extends StatelessWidget {
               width: size,
               height: size,
               fit: fit,
+              // 화면에 그리는 크기만큼만 풀어서(decode) 메모리 · 스크롤 렉을 줄인다(예: 96dp × 3배 = 288px).
+              // 크기를 모르는(size 없음) 큰 사진은 원본 그대로.
+              cacheWidth: size == null ? null : (size! * MediaQuery.devicePixelRatioOf(context)).round(),
               errorBuilder: (context, error, stack) => placeholder,
               loadingBuilder: (context, child, progress) => progress == null ? child : placeholder,
             ),

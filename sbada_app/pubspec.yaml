@@ -30,3 +30,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/splash_left.png
+    - assets/splash_right.png

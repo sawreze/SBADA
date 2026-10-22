@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../map/geo.dart';
 import '../models/category.dart';
 import '../models/user.dart';
 import '../network/session.dart';
@@ -26,6 +27,7 @@ enum OnboardingMode {
 ///  ① 바꾸고 싶은 물건(카테고리, 1개 이상) → 선호도 가중치 1.0
 ///  ② 관심 키워드 → 제목에 들어 있으면 +0.3
 ///  ③ 주로 교환할 가격대 → 내 물건이 없을 때 '가격 적합도'에 쓴다
+///  ④ 사는 동네(처음 쓸 때만) → PUT /api/me/region → 홈 왼쪽 위 동네 이름 · 동네지도 중심 · 가까운 물건
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, required this.services, required this.mode, this.initial});
 
@@ -47,10 +49,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<String> _keywords = [];
   int _band = PriceBand.all.length - 1; // 상관없어요
   final _keywordInput = TextEditingController();
+  final _region = TextEditingController();
   bool _saving = false;
 
   bool get _hasWelcome => widget.mode == OnboardingMode.firstRun;
   int get _firstStep => _hasWelcome ? 0 : 1;
+
+  /// 마지막 단계: 처음 쓸 때는 ④ 사는 동네까지, '취향 다시 고르기'는 ③ 가격대까지(동네는 '내 동네 설정'에서 바꾼다)
+  int get _lastStep => widget.mode == OnboardingMode.edit ? 3 : 4;
+
+  String get _regionText => _region.text.trim().replaceAll(RegExp(r'\s+'), ' ');
 
   @override
   void initState() {
@@ -68,16 +76,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void dispose() {
     _keywordInput.dispose();
+    _region.dispose();
     super.dispose();
   }
 
   bool get _canNext => switch (_step) {
         1 => _categories.isNotEmpty,
+        4 => _regionText.isNotEmpty && _regionText.length <= 20,
         _ => true,
       };
 
   Future<void> _next() async {
-    if (_step < 3) {
+    if (_step < _lastStep) {
       setState(() => _step++);
       return;
     }
@@ -94,9 +104,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       priceMax: band.max,
     );
     setState(() => _saving = true);
+    final region = _lastStep == 4 ? _regionText : null;
     await s.session.store.write(Session.onboardingDoneKey, 'true');
     if (!s.session.isLoggedIn) {
       await s.session.store.write(Session.pendingPrefsKey, jsonEncode(choice.toJson()));
+      if (region != null) await s.session.store.write(Session.pendingRegionKey, region); // 로그인 뒤 서버에 저장
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => LoginScreen(services: s)));
       return;
@@ -104,6 +116,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     try {
       await s.auth.savePreferences(choice);
       await s.session.store.remove(Session.pendingPrefsKey);
+      if (region != null) {
+        await s.auth.changeRegion(region);
+        s.itemsChanged.value++; // 홈 · 동네지도가 새 동네로 다시 그린다
+      }
       if (!mounted) return;
       if (widget.mode == OnboardingMode.edit) {
         Navigator.of(context).pop(true);
@@ -127,7 +143,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final total = 4 - _firstStep;
+    final total = _lastStep + 1 - _firstStep;
     final progress = (_step - _firstStep + 1) / total;
     return Scaffold(
       appBar: AppBar(
@@ -158,7 +174,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   : Text(switch (_step) {
                       0 => '시작하기',
                       1 => _categories.isEmpty ? '1개 이상 골라 주세요' : '다음 (${_categories.length}개 선택)',
-                      3 => '완료',
+                      _ when _step == _lastStep => '완료',
                       _ => '다음',
                     }),
             ),
@@ -172,7 +188,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         0 => _welcome(),
         1 => _categoryStep(),
         2 => _keywordStep(),
-        _ => _priceStep(),
+        3 => _priceStep(),
+        _ => _regionStep(),
       };
 
   Widget _welcome() {
@@ -289,6 +306,67 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         ),
+    ]);
+  }
+
+  /// ④ 사는 동네: 도시 · 구 · 동을 입력하면 아래에 맞는 동네 후보가 뜬다(눌러서 고르기). 목록에 없어도 직접 입력한 그대로 저장
+  Widget _regionStep() {
+    final q = _regionText;
+    final words = q.split(' ').where((w) => w.isNotEmpty).toList();
+    final all = knownRegions();
+    final hits = q.isEmpty
+        ? const <String>[]
+        : all.where((r) => words.every((w) => r.contains(w))).take(8).toList();
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      Text('어느 동네에\n사세요?', style: sbTitle),
+      const SizedBox(height: 8),
+      Text('사는 도시나 동네를 적어 주세요. 홈 왼쪽 위에 내 동네가 뜨고, 가까운 이웃의 물건부터 보여 드려요.', style: sbBody),
+      const SizedBox(height: 20),
+      TextField(
+        key: const ValueKey('onboarding-region'),
+        controller: _region,
+        maxLength: 20,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) {
+          if (_canNext) _next();
+        },
+        decoration: sbInput(null, hint: '예) 부산 해운대구 우동, 수원시 인계동, 마포구 망원동'),
+      ),
+      if (hits.isNotEmpty) ...[
+        const SizedBox(height: 4),
+        for (final r in hits)
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            leading: Icon(Icons.place_outlined, color: Sb.mintText),
+            title: Text(r, style: TextStyle(fontSize: 16, color: Sb.navy, fontWeight: r == q ? FontWeight.w800 : FontWeight.w500)),
+            trailing: r == q ? Icon(Icons.check_circle, color: Sb.mintText) : null,
+            onTap: () => setState(() {
+              _region.text = r;
+              _region.selection = TextSelection.collapsed(offset: r.length);
+            }),
+          ),
+      ] else if (q.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text('목록에 없는 동네예요. 적은 그대로 \'$q\'(으)로 저장해요.', style: sbCaption),
+        )
+      else ...[
+        const SizedBox(height: 8),
+        Text('많이 찾는 동네', style: TextStyle(fontSize: 13, color: Sb.text2)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final r in const ['서울 강남구 역삼동', '마포구 망원동', '경기 수원시 인계동', '부산 해운대구 우동', '대구 수성구 범어동', '제주 제주시 노형동'])
+            ActionChip(
+              label: Text(r),
+              onPressed: () => setState(() {
+                _region.text = r;
+                _region.selection = TextSelection.collapsed(offset: r.length);
+              }),
+            ),
+        ]),
+      ],
     ]);
   }
 }

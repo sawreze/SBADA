@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- debug · profile 빌드에서만 개발 PC(10.0.2.2)·로컬 주소의 http/ws 평문 연결을 허용한다. release 에는 넣지 않는다. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain>10.0.2.2</domain>
+        <domain>127.0.0.1</domain>
+        <domain>localhost</domain>
+    </domain-config>
+</network-security-config>

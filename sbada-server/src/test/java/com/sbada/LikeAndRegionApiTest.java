@@ -62,6 +62,11 @@ class LikeAndRegionApiTest {
         // 다른 사람의 관심목록에는 없다
         mvc.perform(get("/api/me/likes").header("Authorization", owner.bearer()))
                 .andExpect(jsonPath("$.items", hasSize(0)));
+        // 찜 수(likeCount): 두 번 눌러도 1 — 물건 상세 · 관심목록 모두
+        mvc.perform(get("/api/items/" + itemId).header("Authorization", owner.bearer()))
+                .andExpect(jsonPath("$.likeCount").value(1));
+        mvc.perform(get("/api/me/likes").header("Authorization", fan.bearer()))
+                .andExpect(jsonPath("$.items[0].likeCount").value(1));
 
         // 해제(두 번 해도 같음) → 관심목록 비어 있음
         for (int i = 0; i < 2; i++) {
@@ -71,6 +76,8 @@ class LikeAndRegionApiTest {
         }
         mvc.perform(get("/api/me/likes").header("Authorization", fan.bearer()))
                 .andExpect(jsonPath("$.items", hasSize(0)));
+        mvc.perform(get("/api/items/" + itemId).header("Authorization", owner.bearer()))
+                .andExpect(jsonPath("$.likeCount").value(0));
 
         // 내린 물건은 관심목록에서 빠진다
         mvc.perform(post("/api/items/" + itemId + "/like").header("Authorization", fan.bearer()))

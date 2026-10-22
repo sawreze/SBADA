@@ -67,7 +67,7 @@ public final class ItemDtos {
                            int price, int priceMin, int priceMax, double aiConfidence, String aiReason,
                            String aiProvider, List<String> wishCategories, List<String> wishCategoryLabels,
                            List<String> imageUrls, UserDtos.PublicUser owner,
-                           int viewCount, int requestCount, String createdAt, String moderationReason,
+                           int viewCount, int requestCount, int likeCount, String createdAt, String moderationReason,
                            String farewellMessage) {
         public static ItemView from(Item i) {
             // 원하는 카테고리는 enum 선언 순서로 정렬해 항상 같은 순서로 보낸다
@@ -82,7 +82,7 @@ public final class ItemDtos {
                     i.getImages().stream().map(ItemImage::url).toList(),
                     UserDtos.PublicUser.from(i.getOwner()),
                     // Instant.toString() = ISO-8601 형식 "2026-10-21T02:00:00Z" (앱이 DateTime.parse 로 읽는다)
-                    i.getViewCount(), i.getRequestCount(), i.getCreatedAt().toString(),
+                    i.getViewCount(), i.getRequestCount(), i.getLikeCount(), i.getCreatedAt().toString(),
                     // 보류(HELD) 이유: 주인에게만 보이는 물건이라 그대로 내려 준다(그 밖의 상태는 null)
                     i.getModerationReason(),
                     i.getFarewellMessage());

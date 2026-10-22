@@ -32,13 +32,29 @@ def load_model(model_id):
                              bnb_4bit_compute_dtype=torch.bfloat16)
     try:
         model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=bnb, device_map="auto",
-                                                     torch_dtype=torch.bfloat16)
+                                                     dtype=torch.bfloat16)
     except (ValueError, KeyError):
         # 멀티모달(사진+글) 모델이라 CausalLM 으로 안 열리면 이미지-텍스트 클래스로 연다(글만 학습)
         from transformers import AutoModelForImageTextToText
         model = AutoModelForImageTextToText.from_pretrained(model_id, quantization_config=bnb, device_map="auto",
-                                                            torch_dtype=torch.bfloat16)
+                                                            dtype=torch.bfloat16)
     return model
+
+
+LORA_SUFFIX = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
+
+
+def lora_targets(model):
+    """LoRA 를 붙일 층: '글(언어 모델)' 부분의 일반 Linear 만.
+    Gemma 4 는 사진 · 소리 인코더에도 q_proj 같은 같은 이름의 층(Gemma4ClippableLinear)이 있어서
+    이름만으로 고르면 PEFT 가 지원하지 않는 층까지 잡혀 오류가 난다 → 종류(nn.Linear)와 이름으로 거른다."""
+    skip = ("vision", "audio", "embed_vision", "embed_audio")
+    names = [n for n, m in model.named_modules()
+             if n.split(".")[-1] in LORA_SUFFIX and isinstance(m, torch.nn.Linear) and not any(k in n for k in skip)]
+    if not names:
+        raise SystemExit("LoRA 를 붙일 층을 찾지 못했어요(모델 구조 확인 필요)")
+    print(f"LoRA 대상 층 {len(names)}개 (예: {names[0]})")
+    return names
 
 
 def encode(tok, row, max_len):
@@ -105,7 +121,7 @@ def main():
     model = load_model(args.model)
     model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     lora = LoraConfig(r=8, lora_alpha=16, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
-                      target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"])
+                      target_modules=lora_targets(model))
     model = get_peft_model(model, lora)
     model.print_trainable_parameters()
 
@@ -119,7 +135,7 @@ def main():
         model=model,
         args=TrainingArguments(
             output_dir=str(out / "checkpoints"), num_train_epochs=args.epochs, per_device_train_batch_size=1,
-            gradient_accumulation_steps=8, learning_rate=2e-4, lr_scheduler_type="cosine", warmup_ratio=0.05,
+            gradient_accumulation_steps=8, learning_rate=2e-4, lr_scheduler_type="cosine", warmup_steps=2,
             logging_steps=5, save_strategy="no", bf16=True, optim="paged_adamw_8bit", report_to=[],
             gradient_checkpointing=True, remove_unused_columns=False),
         train_dataset=train_ds,
@@ -136,10 +152,10 @@ def main():
     del model, trainer
     torch.cuda.empty_cache()
     try:
-        base = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16, device_map="cpu")
+        base = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16, device_map="cpu")
     except (ValueError, KeyError):
         from transformers import AutoModelForImageTextToText
-        base = AutoModelForImageTextToText.from_pretrained(args.model, torch_dtype=torch.bfloat16, device_map="cpu")
+        base = AutoModelForImageTextToText.from_pretrained(args.model, dtype=torch.bfloat16, device_map="cpu")
     merged = PeftModel.from_pretrained(base, out / "lora").merge_and_unload()
     merged.save_pretrained(out / "merged", safe_serialization=True)
     tok.save_pretrained(out / "merged")

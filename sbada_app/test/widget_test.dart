@@ -71,7 +71,7 @@ void main() {
     expect(find.text('다음 (2개 선택)'), findsOneWidget);
   });
 
-  testWidgets('온보딩 완료(로그인 전) → 고른 값을 기기에 보관하고 로그인 화면으로 간다', (tester) async {
+  testWidgets('온보딩 완료(로그인 전) → 고른 값 · 사는 동네를 기기에 보관하고 로그인 화면으로 간다', (tester) async {
     phoneSize(tester);
     final store = MemoryStore();
     final services = fakeServices(store);
@@ -88,6 +88,16 @@ void main() {
     await tester.tap(find.text('다음'));
     await tester.pumpAndSettle();
     await tapVisible(tester, find.text('1~5만원'));
+    await tester.tap(find.text('다음'));
+    await tester.pumpAndSettle();
+
+    // ④ 사는 동네: 비어 있으면 '완료'를 못 누르고, '해운대' 를 치면 후보가 뜬다 → 눌러서 고르기
+    expect(find.text('어느 동네에\n사세요?'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, '완료')).onPressed, isNull);
+    await tester.enterText(find.byKey(const ValueKey('onboarding-region')), '해운대');
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('부산 해운대구 우동'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('완료'));
     await tester.pumpAndSettle();
 
@@ -97,6 +107,7 @@ void main() {
     expect(pending['keywords'], ['캠핑']);
     expect(pending['priceMin'], 10000);
     expect(pending['priceMax'], 50000);
+    expect(store.data[Session.pendingRegionKey], '부산 해운대구 우동'); // 로그인 뒤 PUT /api/me/region
     expect(find.text('로그인'), findsWidgets);
   });
 }

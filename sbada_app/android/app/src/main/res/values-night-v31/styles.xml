@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12 이상 · 다크 모드: 시스템 시작 화면 = 아이콘 배경색 + 곰 · 손 그림(splash_icon, 288dp 안에 가로 170dp, 192dp 원 안에 들어감)
+         → 바로 이어서 Flutter 실행 화면(아이콘 + "쓰던 물건을 바꾸다.")이 같은 색 위에 나타난다 -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

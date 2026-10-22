@@ -11,7 +11,8 @@ import 'theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ThemeController.load(); // 저장해 둔 다크/화이트 모드
-  final services = await AppServices.create();
+  // 실행 화면 그림(곰 · 손)을 미리 불러 두기 — 서비스 준비와 같이 기다린다
+  final (services, _) = await (AppServices.create(), SwapLogo.precache()).wait;
   runApp(SbadaApp(services: services));
 }
 
