@@ -40,6 +40,9 @@ class KakaoMapController {
 
   Future<void> panTo(LatLng p, {int? level}) async =>
       _state?._js('panTo(${p.lat}, ${p.lng}, ${level ?? 'null'})');
+
+  /// 지도 확대(+1) · 축소(-1). 동네지도 왼쪽의 − / + 버튼
+  Future<void> zoomBy(int d) async => _state?._js('zoomBy($d)');
 }
 
 /// 지도를 WebView 로 띄운다. 핀 모양·자바스크립트 함수(setPins/selectPin/panTo)는 두 지도가 같다.
@@ -210,6 +213,11 @@ $_pinJs
     if(level) map.setLevel(level);
     map.panTo(new kakao.maps.LatLng(lat, lng));
   }
+  // − / + 버튼: 카카오는 level 이 작을수록 가까이
+  function zoomBy(d){
+    if(!map) return;
+    map.setLevel(Math.max(1, Math.min(14, map.getLevel() - d)), {animate:true});
+  }
 
   kakao.maps.load(function(){
     window.__mapOk = true; clearTimeout(failTimer);
@@ -379,6 +387,11 @@ $_pinJs
     if(!map) return;
     if(level) map.setView([lat, lng], Math.max(3, Math.min(19, 20 - level)));
     else map.panTo([lat, lng]);
+  }
+  // − / + 버튼: Leaflet 은 zoom 이 클수록 가까이
+  function zoomBy(d){
+    if(!map) return;
+    if(d > 0) map.zoomIn(); else map.zoomOut();
   }
 
   (function(){

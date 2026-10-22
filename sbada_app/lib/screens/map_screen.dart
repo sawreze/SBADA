@@ -140,6 +140,47 @@ class _MapScreenState extends State<MapScreen> {
       ..scaleByDouble(scale, scale, 1, 1);
   }
 
+  /// − / + 버튼. 실제 지도(WebView)는 지도에 맡기고, 약도는 화면 가운데를 기준으로 1.4배씩 키우고 줄인다.
+  void _zoom(int d) {
+    if (_useKakao) {
+      _kakao.zoomBy(d);
+      return;
+    }
+    if (_viewport == Size.zero) return;
+    final current = _transform.value.getMaxScaleOnAxis();
+    final next = (current * (d > 0 ? 1.4 : 1 / 1.4)).clamp(0.5, 2.5);
+    final f = next / current;
+    final c = Offset(_viewport.width / 2, _viewport.height * 0.36);
+    _transform.value = Matrix4.identity()
+      ..translateByDouble(c.dx, c.dy, 0, 1)
+      ..scaleByDouble(f, f, 1, 1)
+      ..translateByDouble(-c.dx, -c.dy, 0, 1)
+      ..multiply(_transform.value);
+  }
+
+  /// 목록 시트 왼쪽 위에 붙는 유리 − / + 버튼(세로). 48dp 터치 영역
+  Widget _zoomButtons() {
+    Widget btn(IconData icon, String tip, int d) => Tooltip(
+          message: tip,
+          child: InkWell(
+            onTap: () => _zoom(d),
+            child: SizedBox(width: 48, height: 44, child: Icon(icon, color: Sb.navy, size: 22)),
+          ),
+        );
+    return Glass(
+      radius: 16,
+      tint: Sb.glassButton,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          btn(Icons.add_rounded, '지도 확대', 1),
+          Container(width: 28, height: 1, color: Sb.line),
+          btn(Icons.remove_rounded, '지도 축소', -1),
+        ]),
+      ),
+    );
+  }
+
   /// 거리는 실제 좌표(위도·경도)로 잰다. 약도에서도 같은 값을 보여 준다.
   double _km(Item item) => itemLatLng(item).kmTo(_meGeo);
 
@@ -280,6 +321,12 @@ class _MapScreenState extends State<MapScreen> {
                   bottom: c.maxHeight * 0.30 + 12,
                   child: _preview(_selected!),
                 ),
+              // ── 목록 왼쪽 위: 지도 확대 · 축소(핀 미리보기 카드가 열리면 그 위로) ──
+              Positioned(
+                left: 16,
+                bottom: c.maxHeight * 0.30 + 12 + (_selected != null ? 112 : 0),
+                child: _zoomButtons(),
+              ),
               // ── 아래: 끌어올리는 목록 시트 ──
               DraggableScrollableSheet(
                 initialChildSize: 0.30,

@@ -204,7 +204,7 @@ class MainActivity : FlutterActivity() {
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(Notification.BigTextStyle().bigText(body))
-            .setColor(0xFF2F6BFF.toInt())
+            .setColor(0xFF2E9E63.toInt()) // 알림 아이콘 색(민트 계열 초록, 흰 바탕에서도 보이게)
             .setAutoCancel(true)
             .setContentIntent(pending)
             .build()
