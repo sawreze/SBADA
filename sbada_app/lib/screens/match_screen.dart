@@ -59,11 +59,13 @@ class _MatchScreenState extends State<MatchScreen> {
     if (ok != true || !mounted) return;
     setState(() => _busyId = rec.item.id);
     try {
-      await widget.services.exchanges.request(targetItemId: rec.item.id, offeredItemId: widget.item.id);
+      final ex = await widget.services.exchanges.request(targetItemId: rec.item.id, offeredItemId: widget.item.id);
       if (!mounted) return;
       setState(() => _requested.add(rec.item.id));
       widget.services.itemsChanged.value++;
-      showSnack(context, '교환 요청을 보냈어요! 상대가 수락하면 알림으로 알려 드려요 🔔');
+      showSnack(context, ex.status == 'ACCEPTED'
+          ? '교환이 바로 성사되었어요! 🎉'
+          : '교환 요청을 보냈어요! 상대가 수락하면 알림으로 알려 드려요 🔔');
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
     } finally {

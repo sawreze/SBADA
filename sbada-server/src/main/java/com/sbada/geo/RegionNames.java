@@ -62,12 +62,18 @@ public final class RegionNames {
 
     static String dongName(Map<String, Object> address) {
         String quarter = str(address, "quarter");
-        if (quarter != null && quarter.endsWith("동")) {
-            return withoutNumber(quarter);
-        }
         String suburb = str(address, "suburb");
-        if (suburb != null && suburb.endsWith("동")) {
-            return withoutNumber(suburb);
+        String admin = suburb != null && suburb.endsWith("동") ? withoutNumber(suburb) : null;
+        if (quarter != null && quarter.endsWith("동")) {
+            String legal = withoutNumber(quarter);
+            // 법정동(quarter)과 행정동(suburb)이 서로 다른 동이면 행정동을 쓴다.
+            // 강 위 · 구 경계에서는 법정동 경계가 옆 구까지 넘어와 '영등포구 망원동'처럼 구와 동이 어긋난 답이 온다
+            // (2026-10-22 실제: 서부간선로 37.5496,126.8897 → quarter 망원동(마포구) · suburb 양평2동 · borough 영등포구).
+            // 행정동은 구(borough)와 같은 행정 구역 체계라 항상 짝이 맞는다
+            return admin != null && !admin.equals(legal) ? admin : legal;
+        }
+        if (admin != null) {
+            return admin;
         }
         for (String key : new String[] {"town", "village", "quarter", "suburb"}) {
             String v = str(address, key);

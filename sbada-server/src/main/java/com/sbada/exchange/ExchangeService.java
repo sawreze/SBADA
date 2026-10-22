@@ -1,8 +1,12 @@
 package com.sbada.exchange;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,9 +50,16 @@ public class ExchangeService {
     private final PreferenceService preferences;
     private final RealtimeHub hub;
 
+    /**
+     * 시연용: 이 아이디들이 '바로 바꾸기'를 보내면 상대의 수락 없이 바로 교환 성사(sbada.demo.instant-exchange-users).
+     * 발표 시연을 빠르게 하려는 예외 규칙이라 기본값은 시연 계정 admin 하나뿐이고, 비우면 모든 사람이 원래대로 '상대가 수락해야 성사'.
+     */
+    private final Set<String> instantExchangeUsers;
+
     public ExchangeService(ExchangeRepository exchanges, ItemRepository items, AppUserRepository users,
                            ChatService chat, NotificationService notifications, PreferenceService preferences,
-                           RealtimeHub hub) {
+                           RealtimeHub hub,
+                           @Value("${sbada.demo.instant-exchange-users:}") String instantExchangeUsers) {
         this.exchanges = exchanges;
         this.items = items;
         this.users = users;
@@ -56,6 +67,8 @@ public class ExchangeService {
         this.notifications = notifications;
         this.preferences = preferences;
         this.hub = hub;
+        this.instantExchangeUsers = Arrays.stream(instantExchangeUsers.split(","))
+                .map(String::trim).filter(u -> !u.isEmpty()).collect(Collectors.toUnmodifiableSet());
     }
 
     /** POST /api/exchanges — 바로 바꾸기 요청 */
@@ -96,6 +109,11 @@ public class ExchangeService {
 
         // ⑤ 선호도 학습 + 받은 사람에게 알림(refType "EXCHANGE", refId = 요청 번호 → 앱이 눌렀을 때 제안 카드를 연다)
         preferences.learn(userId, target.getCategory(), PreferenceService.Behavior.EXCHANGE_REQUEST);
+        // 시연 계정(admin 등): 상대의 수락을 기다리지 않고 같은 트랜잭션에서 바로 성사 처리
+        if (instantExchangeUsers.contains(requester.getUsername())) {
+            complete(request, true);
+            return ExchangeDtos.ExchangeView.from(request, userId);
+        }
         notifications.notify(target.getOwner().getId(), NotificationType.EXCHANGE_REQUESTED,
                 "교환 요청이 왔어요",
                 String.format("%s님이 '%s'(으)로 '%s'을(를) 바꾸고 싶어해요. 수락하면 교환이 완료돼요.",
@@ -113,6 +131,16 @@ public class ExchangeService {
         if (!request.isReceivedBy(userId)) {
             throw ApiException.forbidden("NOT_RECEIVER", "요청을 받은 사람만 수락할 수 있습니다.");
         }
+        complete(request, false);
+        return ExchangeDtos.ExchangeView.from(request, userId);
+    }
+
+    /**
+     * 교환 성사 처리(수락 · 시연 계정의 바로 성사 공통): 상태 ACCEPTED · 두 물건 TRADED · 겹친 요청 자동 취소 · 선호도 · 알림.
+     * instant = true 면 받은 사람이 직접 수락한 게 아니므로, 요청자 대신 받은 사람에게 '바로 성사' 알림을 보낸다.
+     */
+    private void complete(ExchangeRequest request, boolean instant) {
+        long receiverId = request.getTargetOwner().getId();
         Item offered = request.getOfferedItem();
         Item target = request.getTargetItem();
         request.accept();          // REQUESTED 가 아니면 409
@@ -139,15 +167,22 @@ public class ExchangeService {
 
         // 교환 성사는 가장 강한 관심 신호(+0.3): 요청자는 받은 물건 종류를, 수락자는 받은 물건 종류를 더 좋아한다고 학습
         preferences.learn(request.getRequester().getId(), target.getCategory(), PreferenceService.Behavior.TRADE);
-        preferences.learn(userId, offered.getCategory(), PreferenceService.Behavior.TRADE);
+        preferences.learn(receiverId, offered.getCategory(), PreferenceService.Behavior.TRADE);
         postSystem(request, String.format("🎉 교환이 성사되었어요! '%s' ↔ '%s'", offered.getTitle(), target.getTitle()));
-        notifications.notify(request.getRequester().getId(), NotificationType.EXCHANGE_ACCEPTED,
-                "교환이 성사되었어요 🎉",
-                String.format("%s님이 '%s' ↔ '%s' 교환을 수락했어요. 채팅으로 만날 약속을 정해 보세요.",
-                        request.getTargetOwner().getNickname(), offered.getTitle(), target.getTitle()),
-                "EXCHANGE", request.getId());
+        if (instant) {
+            notifications.notify(receiverId, NotificationType.EXCHANGE_ACCEPTED,
+                    "교환이 성사되었어요 🎉",
+                    String.format("%s님과 '%s' ↔ '%s' 교환이 바로 성사되었어요(시연 계정). 채팅으로 만날 약속을 정해 보세요.",
+                            request.getRequester().getNickname(), offered.getTitle(), target.getTitle()),
+                    "EXCHANGE", request.getId());
+        } else {
+            notifications.notify(request.getRequester().getId(), NotificationType.EXCHANGE_ACCEPTED,
+                    "교환이 성사되었어요 🎉",
+                    String.format("%s님이 '%s' ↔ '%s' 교환을 수락했어요. 채팅으로 만날 약속을 정해 보세요.",
+                            request.getTargetOwner().getNickname(), offered.getTitle(), target.getTitle()),
+                    "EXCHANGE", request.getId());
+        }
         publish(request);
-        return ExchangeDtos.ExchangeView.from(request, userId);
     }
 
     /** POST /api/exchanges/{id}/reject — 거절 */

@@ -4,6 +4,7 @@ import '../network/api_exception.dart';
 import '../network/session.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
+import '../widgets/gps_dong_button.dart';
 import 'splash_gate.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -109,6 +110,13 @@ class _SignupScreenState extends State<SignupScreen> {
             ),
             const SizedBox(height: 12),
             TextFormField(controller: _region, decoration: sbInput('동네', hint: '예) 마포구 망원동')),
+            const SizedBox(height: 8),
+            // GPS 로 찾으면 '동네' 칸에 채워진다(고칠 수 있음). 온보딩 ④ · 내 동네 설정과 같은 기능의 작은 버튼
+            GpsDongButton(
+              services: widget.services,
+              compact: true,
+              onFound: (d) => setState(() => _region.text = d.region),
+            ),
             if (e != null && e.errors.isEmpty) ...[
               const SizedBox(height: 12),
               Text(e.message, style: TextStyle(color: Sb.red)),

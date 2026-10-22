@@ -100,5 +100,9 @@ class GeoApiTest {
         assertThat(RegionNames.from(Map.of("quarter", "연동", "suburb", "신제주", "city", "제주시",
                 "province", "제주특별자치도", "country_code", "kr")).region()).isEqualTo("제주 제주시 연동");
         assertThat(RegionNames.from(Map.of("city", "Paris", "country_code", "fr"))).isNull();
+        // 강 위 · 구 경계: 법정동(망원동, 마포구)과 행정동(양평2동, 영등포구)이 어긋나면 구와 짝이 맞는 행정동
+        // (2026-10-22 에뮬레이터 '대략적인 위치' 실제 응답, 서부간선로)
+        assertThat(RegionNames.from(Map.of("road", "서부간선로", "quarter", "망원동", "suburb", "양평2동",
+                "borough", "영등포구", "city", "서울특별시", "country_code", "kr")).region()).isEqualTo("서울 영등포구 양평동");
     }
 }

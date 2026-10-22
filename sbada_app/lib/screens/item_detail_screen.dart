@@ -98,11 +98,14 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     if (choice == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      await widget.services.exchanges
+      final ex = await widget.services.exchanges
           .request(targetItemId: item.id, offeredItemId: choice.item.id, message: choice.message);
       if (!mounted) return;
       widget.services.itemsChanged.value++;
-      showSnack(context, '교환 요청을 보냈어요! ${item.owner.nickname}님이 수락하면 교환이 완료돼요 🔔');
+      // 시연 계정(admin)은 서버가 수락 없이 바로 성사시킨다(status ACCEPTED)
+      showSnack(context, ex.status == 'ACCEPTED'
+          ? '교환이 바로 성사되었어요! 🎉 채팅에서 약속을 정해 보세요'
+          : '교환 요청을 보냈어요! ${item.owner.nickname}님이 수락하면 교환이 완료돼요 🔔');
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
     } finally {
