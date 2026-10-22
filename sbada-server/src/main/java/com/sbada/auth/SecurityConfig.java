@@ -1,5 +1,8 @@
 package com.sbada.auth;
 
+import java.util.Arrays;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +15,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.sbada.common.ApiException;
 import com.sbada.user.AppUserRepository;
@@ -61,7 +66,22 @@ public class SecurityConfig {
      */
     @Bean
     SecurityFilterChain api(HttpSecurity http, JwtService jwt, AppUserRepository users,
-                            @Value("${spring.h2.console.enabled:false}") boolean h2Console) throws Exception {
+                            @Value("${spring.h2.console.enabled:false}") boolean h2Console,
+                            @Value("${sbada.cors.allowed-origins:}") String corsOrigins) throws Exception {
+        // 다른 주소의 웹 화면(예: Vercel 에 올린 https://sbada.vercel.app)이 이 서버 API 를 부를 수 있게 허용(CORS).
+        // 비어 있으면(기본, 내 PC) 끈다 — 웹 화면을 같은 서버(/app/)에서 내려 주므로 필요 없음.
+        // 예) sbada.cors.allowed-origins=https://*.vercel.app (쉼표로 여러 개, * 는 그 자리 아무 글자)
+        List<String> origins = Arrays.stream(corsOrigins.split(",")).map(String::trim).filter(o -> !o.isEmpty()).toList();
+        if (!origins.isEmpty()) {
+            CorsConfiguration cors = new CorsConfiguration();
+            cors.setAllowedOriginPatterns(origins);
+            cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+            cors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+            cors.setMaxAge(3600L);
+            UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+            source.registerCorsConfiguration("/api/**", cors);
+            http.cors(c -> c.configurationSource(source));
+        }
         http
                 // CSRF 보호 끔: 쿠키 대신 Authorization 헤더(Bearer 토큰)로 인증하므로
                 // 브라우저가 쿠키를 자동으로 붙이는 것을 노리는 CSRF 공격이 성립하지 않는다.

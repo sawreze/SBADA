@@ -1,0 +1,6 @@
+# 이미지에 넣지 않을 것: 빌드 결과 · 로컬 DB · 비밀값
+build/
+.gradle/
+data/
+application-local.properties
+*.log
