@@ -42,10 +42,22 @@ public final class AuthDtos {
             String region) { // @NotBlank 가 없으므로 선택 항목(null 가능)
     }
 
-    /** POST /api/auth/login 요청 본문 */
+    /**
+     * POST /api/auth/login 요청 본문.
+     * rememberMe(선택): 로그인 화면의 '로그인 유지' 체크 — true 면 오래 가는 토큰(기본 30일), 없거나 false 면 2시간
+     */
     public record LoginRequest(
             @NotBlank(message = "아이디를 입력해 주세요.") String username,
-            @NotBlank(message = "비밀번호를 입력해 주세요.") String password) {
+            @NotBlank(message = "비밀번호를 입력해 주세요.") String password,
+            Boolean rememberMe) {
+
+        public LoginRequest(String username, String password) {
+            this(username, password, null);
+        }
+
+        public boolean remember() {
+            return Boolean.TRUE.equals(rememberMe);
+        }
     }
 
     /**
@@ -58,7 +70,12 @@ public final class AuthDtos {
      */
     public record KakaoLoginRequest(
             @NotBlank(message = "카카오 토큰이 없습니다.") @Size(max = 512, message = "카카오 토큰이 너무 깁니다.")
-            String accessToken) {
+            String accessToken,
+            Boolean rememberMe) {
+
+        public boolean remember() {
+            return Boolean.TRUE.equals(rememberMe);
+        }
     }
 
     public record LoginResponse(String accessToken, String tokenType, long expiresIn, UserDtos.UserView user) {

@@ -253,7 +253,8 @@ $_pinJs
   String get _css => '''
   html,body,#map{margin:0;padding:0;width:100%;height:100%;background:#1B1E23;}
   .pin{position:relative;width:88px;height:112px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-  .pin svg{position:absolute;left:0;top:0;overflow:visible;}
+  /* 성능: 빛(drop-shadow)이 있는 핀 그림을 GPU 층으로 올려 지도를 움직일 때마다 빛을 다시 계산하지 않게 */
+  .pin svg{position:absolute;left:0;top:0;overflow:visible;transform:translateZ(0);}
   .pin .photo{position:absolute;left:${12 + 32 - 21}px;top:${12 + 27.5 - 21}px;width:42px;height:42px;border-radius:50%;
               border:2px solid #fff;box-sizing:border-box;object-fit:cover;background:#2B2E35;}
   .pin .score{position:absolute;left:12px;width:64px;top:${12 + 27.5 + 21 + 1}px;text-align:center;

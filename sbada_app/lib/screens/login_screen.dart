@@ -23,12 +23,17 @@ class _LoginScreenState extends State<LoginScreen> {
   final _username = TextEditingController();
   final _password = TextEditingController();
   bool _loading = false;
+  bool _keep = true; // 로그인 유지
   bool _kakaoLoading = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    // 지난번 '로그인 유지' 선택을 그대로(처음엔 켜짐)
+    widget.services.session.keepLogin().then((v) {
+      if (mounted) setState(() => _keep = v);
+    });
     if (widget.notice != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) showSnack(context, widget.notice!);
@@ -54,7 +59,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      await widget.services.auth.login(_username.text, _password.text);
+      await widget.services.session.setKeepLogin(_keep);
+      await widget.services.auth.login(_username.text, _password.text, remember: _keep);
       if (!mounted) return;
       await AppFlow.afterLogin(context, widget.services);
     } on ApiException catch (e) {
@@ -74,7 +80,8 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final kakaoToken = await KakaoLogin.obtainAccessToken();
       if (kakaoToken == null || !mounted) return; // 사용자가 취소
-      await widget.services.auth.kakaoLogin(kakaoToken);
+      await widget.services.session.setKeepLogin(_keep);
+      await widget.services.auth.kakaoLogin(kakaoToken, remember: _keep);
       if (!mounted) return;
       await AppFlow.afterLogin(context, widget.services);
     } on ApiException catch (e) {
@@ -144,7 +151,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       onSubmitted: (_) => _login(),
                       decoration: sbInput(null, hint: '비밀번호를 입력하세요', errorText: _error),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 10),
+                    _keepLoginRow(),
+                    const SizedBox(height: 14),
                     FilledButton(
                       onPressed: _loading ? null : _login,
                       child: _loading
@@ -185,6 +194,40 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   /// 입력칸 위 작은 라벨(디자인 시안: 13 · 보조 글자색)
+  /// '로그인 유지' 체크: 켜면 앱을 껐다 켜도 30일 동안 로그인 상태, 끄면 앱을 끌 때 로그아웃
+  Widget _keepLoginRow() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Semantics(
+        checked: _keep,
+        label: '로그인 유지',
+        child: InkWell(
+          key: const ValueKey('keep-login'),
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => setState(() => _keep = !_keep),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(2, 6, 10, 6),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: _keep ? Sb.blue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: _keep ? Sb.blue : Sb.text3, width: 1.6),
+                ),
+                child: _keep ? const Icon(Icons.check_rounded, size: 16, color: Sb.onAccent) : null,
+              ),
+              const SizedBox(width: 10),
+              Text('로그인 유지', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Sb.navy)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Text(text, style: TextStyle(fontSize: 13, color: Sb.text2)),

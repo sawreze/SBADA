@@ -38,7 +38,7 @@ class Glass extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: br,
-        child: BackdropFilter(
+        child: BackdropFilter.grouped(
           filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
           child: Container(
             padding: padding,
@@ -75,7 +75,7 @@ class Glass extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: br,
-        child: BackdropFilter(
+        child: BackdropFilter.grouped(
           filter: ImageFilter.compose(
             outer: const ColorFilter.matrix(_saturate),
             inner: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
@@ -340,7 +340,24 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
             onHorizontalDragCancel: _dragEnd,
             child: AnimatedBuilder(
               animation: Listenable.merge([_move, _lift]),
-              builder: (context, _) {
+              // 성능: 버튼 줄은 애니메이션과 상관없으니 한 번만 만들고, 따로 그려 둔 그림(RepaintBoundary)을 재사용
+              child: RepaintBoundary(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Row(children: [
+                    for (var i = 0; i < n; i++)
+                      Expanded(
+                        child: _TabButton(
+                          tab: widget.tabs[i],
+                          selected: i == widget.index,
+                          onTap: () => widget.onTap(i),
+                          onLightGlass: true,
+                        ),
+                      ),
+                  ]),
+                ),
+              ),
+              builder: (context, buttons) {
                 final t = _move.value;
                 final moveM = _move.isAnimating ? math.sqrt((4 * t * (1 - t)).clamp(0.0, 1.0)) : 0.0;
                 final m = math.max(moveM, Curves.easeOut.transform(_lift.value));
@@ -392,21 +409,8 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
                       ),
                     ),
                   ),
-                  // ③ 탭 버튼들(흰 유리 위라 아이콘은 검정)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Row(children: [
-                      for (var i = 0; i < n; i++)
-                        Expanded(
-                          child: _TabButton(
-                            tab: widget.tabs[i],
-                            selected: i == widget.index,
-                            onTap: () => widget.onTap(i),
-                            onLightGlass: true,
-                          ),
-                        ),
-                    ]),
-                  ),
+                  // ③ 탭 버튼들(흰 유리 위라 아이콘은 검정) — 매 프레임 새로 만들지 않고 그대로 재사용(아래 child)
+                  buttons!,
                   // ④ 누르거나 움직이는 동안: 아래를 확대해 보여 주는 투명 렌즈 + 무지개빛 테
                   if (m > 0.02)
                     Positioned(
@@ -471,7 +475,7 @@ class _ClearGlassBar extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: br,
-        child: BackdropFilter(
+        child: BackdropFilter.grouped(
           filter: ImageFilter.compose(
             outer: const ColorFilter.matrix(_saturate),
             inner: ImageFilter.blur(sigmaX: 10, sigmaY: 10),

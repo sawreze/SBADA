@@ -8,21 +8,24 @@ class AuthRepository {
   final ApiClient api;
   final Session session;
 
-  Future<AppUser> login(String username, String password) async {
+  /// [remember] = 로그인 화면 '로그인 유지'. true 면 서버가 30일 토큰을 주고 기기에 저장(앱을 다시 켜도 로그인 상태),
+  /// false 면 2시간 토큰을 메모리에만 둔다(앱을 끄면 다시 로그인).
+  Future<AppUser> login(String username, String password, {bool remember = true}) async {
     final json = await api.post('/api/auth/login',
-        auth: false, body: {'username': username.trim(), 'password': password}) as Map<String, dynamic>;
+        auth: false,
+        body: {'username': username.trim(), 'password': password, 'rememberMe': remember}) as Map<String, dynamic>;
     final user = AppUser.fromJson(json['user'] as Map<String, dynamic>);
-    await session.signIn(json['accessToken'] as String, user);
+    await session.signIn(json['accessToken'] as String, user, persist: remember);
     return user;
   }
 
   /// 카카오 로그인: 카카오 SDK 가 준 카카오 액세스 토큰을 서버에 보내 스바다 JWT 로 바꾼다(POST /api/auth/kakao).
   /// 처음이면 서버가 계정을 만들어 주고(onboarded=false), 응답 모양은 아이디 로그인과 같다.
-  Future<AppUser> kakaoLogin(String kakaoAccessToken) async {
-    final json = await api.post('/api/auth/kakao', auth: false, body: {'accessToken': kakaoAccessToken})
-        as Map<String, dynamic>;
+  Future<AppUser> kakaoLogin(String kakaoAccessToken, {bool remember = true}) async {
+    final json = await api.post('/api/auth/kakao',
+        auth: false, body: {'accessToken': kakaoAccessToken, 'rememberMe': remember}) as Map<String, dynamic>;
     final user = AppUser.fromJson(json['user'] as Map<String, dynamic>);
-    await session.signIn(json['accessToken'] as String, user);
+    await session.signIn(json['accessToken'] as String, user, persist: remember);
     return user;
   }
 

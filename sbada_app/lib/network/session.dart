@@ -57,9 +57,15 @@ class Session extends ChangeNotifier {
   /// 처음 쓸 때 온보딩에서 고른 사는 동네(로그인 전) → 로그인 뒤 PUT /api/me/region
   static const pendingRegionKey = 'sbada.pending_region';
 
+  /// 로그인 화면 '로그인 유지' 체크 상태(기기에 기억, 처음엔 켜짐)
+  static const keepLoginKey = 'sbada.keep_login';
+
   final KeyValueStore _store;
   String? _token;
   AppUser? _user;
+
+  /// false 면 이번 로그인은 기기에 저장하지 않는다(앱을 껐다 켜면 다시 로그인)
+  bool _persist = true;
 
   String? get token => _token;
   AppUser? get user => _user;
@@ -78,23 +84,36 @@ class Session extends ChangeNotifier {
     }
   }
 
-  Future<void> signIn(String token, AppUser user) async {
+  /// [persist] = '로그인 유지'. false 면 토큰을 메모리에만 두고 기기에 남은 이전 로그인도 지운다.
+  Future<void> signIn(String token, AppUser user, {bool persist = true}) async {
     _token = token;
     _user = user;
-    await _store.write(_tokenKey, token);
-    await _store.write(_userKey, jsonEncode(user.toJson()));
+    _persist = persist;
+    if (persist) {
+      await _store.write(_tokenKey, token);
+      await _store.write(_userKey, jsonEncode(user.toJson()));
+    } else {
+      await _store.remove(_tokenKey);
+      await _store.remove(_userKey);
+    }
     notifyListeners();
   }
 
   Future<void> updateUser(AppUser user) async {
     _user = user;
-    await _store.write(_userKey, jsonEncode(user.toJson()));
+    if (_persist) await _store.write(_userKey, jsonEncode(user.toJson()));
     notifyListeners();
   }
+
+  /// 로그인 화면 체크박스의 마지막 선택(처음엔 true)
+  Future<bool> keepLogin() async => (await _store.read(keepLoginKey)) != 'false';
+
+  Future<void> setKeepLogin(bool on) => _store.write(keepLoginKey, on ? 'true' : 'false');
 
   Future<void> signOut() async {
     _token = null;
     _user = null;
+    _persist = true;
     await _store.remove(_tokenKey);
     await _store.remove(_userKey);
     notifyListeners();

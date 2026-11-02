@@ -4,7 +4,8 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"; source "$ROOT/scripts/_common.sh"
 L="$ROOT/logs/full-check.log"
 {
 echo "[$(date +%H:%M:%S)] 서버 테스트"
-cd "$ROOT/sbada-server" && ./gradlew test --console=plain -q 2>&1 | tail -30; echo "SERVER_TEST_EXIT=${PIPESTATUS[0]}"
+cd "$ROOT/sbada-server" && ./gradlew test --console=plain 2>&1 | grep -E "FAILED|Test.*>|BUILD|tests completed|error:" | tail -40; echo "SERVER_TEST_EXIT=${PIPESTATUS[0]}"
+echo "서버 테스트 결과 파일 수: $(ls build/test-results/test/*.xml 2>/dev/null | wc -l) · 실패: $(grep -l "<failure" build/test-results/test/*.xml 2>/dev/null | wc -l)"
 echo "[$(date +%H:%M:%S)] 앱"
 cd "$ROOT/sbada_app" && flutter pub get >/dev/null
 flutter analyze; echo "ANALYZE_EXIT=$?"

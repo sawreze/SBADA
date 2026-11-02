@@ -25,33 +25,39 @@ PageRoute<T> appRoute<T>({required WidgetBuilder builder, RouteSettings? setting
 class ExpandOrigin {
   ExpandOrigin._();
 
-  static Rect? _rect;
   static DateTime _at = DateTime(2000);
 
-  /// 손가락이 닿은 점 아래에서 가장 가까운 ExpandSource(목록 한 칸)를 찾아 그 위치를 기억
+  static Offset? _point;
+
+  /// 손가락이 닿은 위치만 기억한다(가볍게). 실제로 칸을 찾는 일은 화면을 열 때(take) 한 번만 한다
+  /// — 스크롤할 때마다 hit test 를 하지 않아 목록이 가벼워진다.
   static void capture(Offset position) {
     if (!Apple.on) return;
-    _rect = null;
+    _point = position;
+    _at = DateTime.now();
+  }
+
+  /// [position] 아래에서 가장 가까운 ExpandSource(목록 한 칸)의 화면 위치
+  static Rect? _find(Offset position) {
     final binding = WidgetsBinding.instance;
     final view = binding.platformDispatcher.implicitView;
-    if (view == null) return;
+    if (view == null) return null;
     final result = HitTestResult();
     binding.hitTestInView(result, position, view.viewId);
     for (final entry in result.path) {
       final t = entry.target;
       if (t is! _RenderExpandSource || !t.attached || !t.hasSize) continue;
-      _rect = MatrixUtils.transformRect(t.getTransformTo(null), Offset.zero & t.size);
-      _at = DateTime.now();
-      return;
+      return MatrixUtils.transformRect(t.getTransformTo(null), Offset.zero & t.size);
     }
+    return null;
   }
 
   /// 0.8초 안에 누른 카드가 있으면 그 위치를 한 번만 돌려준다
   static Rect? take() {
-    final r = _rect;
-    _rect = null;
-    if (r == null || DateTime.now().difference(_at) > const Duration(milliseconds: 800)) return null;
-    return r;
+    final p = _point;
+    _point = null;
+    if (p == null || DateTime.now().difference(_at) > const Duration(milliseconds: 800)) return null;
+    return _find(p);
   }
 }
 
@@ -74,10 +80,10 @@ class ExpandPageRoute<T> extends PageRoute<T> {
   final Rect origin;
 
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 520);
+  Duration get transitionDuration => const Duration(milliseconds: 460);
 
   @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 420);
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 380);
 
   @override
   bool get maintainState => true;
@@ -96,7 +102,8 @@ class ExpandPageRoute<T> extends PageRoute<T> {
 
   @override
   Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
-    return _EdgeSwipeBack(route: this, child: builder(context));
+    // RepaintBoundary: 퍼지는 동안 화면 내용을 매 프레임 다시 그리지 않고, 그려 둔 그림을 키우기만 한다
+    return RepaintBoundary(child: _EdgeSwipeBack(route: this, child: builder(context)));
   }
 
   @override
@@ -139,7 +146,7 @@ class ExpandPageRoute<T> extends PageRoute<T> {
                     child: Transform.scale(
                       scale: scale,
                       alignment: Alignment.topLeft,
-                      child: Opacity(opacity: fade, child: child),
+                      child: fade >= 1 ? child! : Opacity(opacity: fade, child: child),
                     ),
                   ),
                 ),
@@ -229,14 +236,27 @@ class PressScale extends StatefulWidget {
 
 class _PressScaleState extends State<PressScale> {
   bool _down = false;
+  Offset? _start;
+
+  void _set(bool v) {
+    if (_down != v) setState(() => _down = v); // 바뀔 때만 다시 그린다
+  }
 
   @override
   Widget build(BuildContext context) {
     if (!Apple.on) return widget.child;
     return Listener(
-      onPointerDown: (_) => setState(() => _down = true),
-      onPointerUp: (_) => setState(() => _down = false),
-      onPointerCancel: (_) => setState(() => _down = false),
+      onPointerDown: (e) {
+        _start = e.position;
+        _set(true);
+      },
+      // 손가락이 움직이면(스크롤) 눌림을 풀어 목록을 스크롤하는 동안 카드가 작아진 채로 다시 그려지지 않게
+      onPointerMove: (e) {
+        final s = _start;
+        if (_down && s != null && (e.position - s).distance > 8) _set(false);
+      },
+      onPointerUp: (_) => _set(false),
+      onPointerCancel: (_) => _set(false),
       child: AnimatedScale(
         scale: _down ? 0.97 : 1.0,
         duration: Duration(milliseconds: _down ? 120 : 380),

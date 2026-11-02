@@ -1,8 +1,10 @@
 package com.sbada.auth;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,14 +35,24 @@ public class AuthService {
     private final JwtService jwt;
     private final KakaoUserClient kakao;
     private final TransactionTemplate tx;
+    private final long rememberTtlSeconds;
 
     public AuthService(AppUserRepository users, PasswordEncoder passwordEncoder, JwtService jwt,
-                       KakaoUserClient kakao, TransactionTemplate tx) {
+                       KakaoUserClient kakao, TransactionTemplate tx,
+                       @Value("${sbada.jwt.remember-ttl-seconds:2592000}") long rememberTtlSeconds) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.jwt = jwt;
         this.kakao = kakao;
         this.tx = tx;
+        this.rememberTtlSeconds = rememberTtlSeconds;
+    }
+
+    /** '로그인 유지'면 오래 가는 토큰(기본 30일), 아니면 기본(2시간) */
+    private AuthDtos.LoginResponse issue(AppUser user, boolean remember) {
+        long ttl = remember ? rememberTtlSeconds : jwt.ttlSeconds();
+        return new AuthDtos.LoginResponse(jwt.issue(user.getId(), Duration.ofSeconds(ttl)), "Bearer", ttl,
+                UserDtos.UserView.from(user));
     }
 
     /**
@@ -84,8 +96,7 @@ public class AuthService {
             throw new ApiException(401, "LOGIN_FAILED", "아이디 또는 비밀번호가 올바르지 않습니다.");
         }
         // 토큰 안에는 사용자 번호(sub)만 들어간다 → 이후 요청에서 '누구인지'를 이 번호로 안다
-        return new AuthDtos.LoginResponse(jwt.issue(user.getId()), "Bearer", jwt.ttlSeconds(),
-                UserDtos.UserView.from(user));
+        return issue(user, input.remember());
     }
 
     /**
@@ -96,12 +107,15 @@ public class AuthService {
      * 새 계정은 onboarded=false 라서 앱이 관심사 고르기(온보딩) 화면으로 보낸다.
      */
     public AuthDtos.LoginResponse kakaoLogin(String kakaoAccessToken) {
+        return kakaoLogin(kakaoAccessToken, false);
+    }
+
+    public AuthDtos.LoginResponse kakaoLogin(String kakaoAccessToken, boolean remember) {
         KakaoUserClient.KakaoProfile profile = kakao.fetch(kakaoAccessToken.trim());
         AppUser user = tx.execute(status -> users.findByKakaoId(profile.id())
                 .orElseGet(() -> users.save(AppUser.forKakao(profile.id(), uniqueUsername(profile.id()),
                         passwordEncoder.encode(UUID.randomUUID().toString()), kakaoNickname(profile), "서울"))));
-        return new AuthDtos.LoginResponse(jwt.issue(user.getId()), "Bearer", jwt.ttlSeconds(),
-                UserDtos.UserView.from(user));
+        return issue(user, remember);
     }
 
     /** 카카오 계정의 스바다 아이디: kakao_회원번호 (이미 있으면 뒤에 _2, _3 …). 아이디 칸은 20자까지 */

@@ -136,6 +136,6 @@ public class AuthController {
      */
     @PostMapping("/kakao")
     public AuthDtos.LoginResponse kakao(@Valid @RequestBody AuthDtos.KakaoLoginRequest input) {
-        return service.kakaoLogin(input.accessToken());
+        return service.kakaoLogin(input.accessToken(), input.remember());
     }
 }

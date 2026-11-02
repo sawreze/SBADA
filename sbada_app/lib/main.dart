@@ -79,9 +79,12 @@ class _SbadaAppState extends State<SbadaApp> {
       theme: buildTheme(),
       scrollBehavior: const _SbScroll(),
       // iOS: 손가락이 닿은 목록 칸을 기억해 두었다가, 열리는 화면이 그 칸에서 퍼져 나오게 한다
-      builder: (context, child) => Apple.on
-          ? Listener(behavior: HitTestBehavior.translucent, onPointerDown: (e) => ExpandOrigin.capture(e.position), child: child)
-          : child!,
+      // BackdropGroup: 한 화면의 유리(BackdropFilter.grouped)들이 뒤 화면을 한 번만 읽어 함께 흐리게 한다(유리가 여러 개여도 가벼움)
+      builder: (context, child) => BackdropGroup(
+        child: Apple.on
+            ? Listener(behavior: HitTestBehavior.translucent, onPointerDown: (e) => ExpandOrigin.capture(e.position), child: child)
+            : child!,
+      ),
       home: widget.home ?? SplashGate(services: widget.services),
     );
   }
