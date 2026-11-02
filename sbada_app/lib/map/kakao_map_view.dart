@@ -301,12 +301,13 @@ $_pinJs
     var s = p.glow || 0;
     var spin = s > 0 && (spinning[p.id] || p.id === selected);
     var fill = (p.id === selected) ? '#93E1B7' : 'rgba(42,45,52,.94)';
+    // 빛 크기: 2026-11-03 요청으로 퍼지는 반경을 약 1.3배로 살짝 키움
     // 도는 핀: 빛 두 겹 / 멈춘 핀: 빛 한 겹(지도를 움직일 때 그리는 비용을 줄임) / 점수 없는 핀: 그림자
     var glow = spin
-      ? 'filter:drop-shadow(0 0 '+(3+8*s).toFixed(1)+'px rgba(52,224,122,'+(0.35+0.6*s).toFixed(2)+'))'
-         + ' drop-shadow(0 0 '+(1+3*s).toFixed(1)+'px rgba(185,255,210,'+(0.3+0.5*s).toFixed(2)+'));'
+      ? 'filter:drop-shadow(0 0 '+(4+11*s).toFixed(1)+'px rgba(52,224,122,'+Math.min(1,0.4+0.6*s).toFixed(2)+'))'
+         + ' drop-shadow(0 0 '+(1.5+4.5*s).toFixed(1)+'px rgba(185,255,210,'+(0.35+0.5*s).toFixed(2)+'));'
       : s > 0
-      ? 'filter:drop-shadow(0 0 '+(2+6*s).toFixed(1)+'px rgba(52,224,122,'+(0.3+0.55*s).toFixed(2)+'));'
+      ? 'filter:drop-shadow(0 0 '+(3+8*s).toFixed(1)+'px rgba(52,224,122,'+(0.35+0.55*s).toFixed(2)+'));'
       : 'filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));';
     var gid = 'g' + p.id;
     var stroke = s > 0 ? 'url(#'+gid+')' : 'rgba(255,255,255,.25)';
@@ -323,7 +324,7 @@ $_pinJs
     var score = (p.score === null || p.score === undefined) ? '–' : (p.score + '%');
     return '<div class="pin'+(p.id===selected?' sel':'')+'" data-id="'+p.id+'">'
       + '<svg width="88" height="112" viewBox="-12 -12 88 112" style="'+glow+'">' + defs
-      + '<path d="'+PIN+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(s>0?(2+2*s).toFixed(1):1)+'"/></svg>'
+      + '<path d="'+PIN+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(s>0?(2.4+2.4*s).toFixed(1):1)+'"/></svg>'
       + '<img class="photo" src="'+p.img+'" onerror="this.style.visibility=\'hidden\'">'
       + '<div class="score">'+score+'</div></div>';
   }

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -172,13 +173,15 @@ class GlassTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // iOS: 렌즈처럼 커지는 리퀴드 글래스 탭바(아래 _AppleTabBar)
+    if (Apple.on) return _AppleTabBar(tabs: tabs, index: index, onTap: onTap);
     final bottom = MediaQuery.of(context).padding.bottom;
     final dark = Sb.isDark;
     final pill = DecoratedBox(
       key: const ValueKey('tab-selected-pill'),
       decoration: BoxDecoration(
         // 선택 칸 알약: 다크는 흰 빛 유리, 화이트는 회색 둥근 배경(테두리 없음)
-        color: Apple.on && !dark ? const Color(0x14000000) : Sb.tabSelected,
+        color: Sb.tabSelected,
         borderRadius: BorderRadius.circular(999),
         border: dark ? Border.all(color: const Color(0x1FFFFFFF), width: 0.8) : null,
       ),
@@ -188,18 +191,15 @@ class GlassTabBar extends StatelessWidget {
       child: LayoutBuilder(builder: (context, c) {
         final w = (c.maxWidth - 12) / tabs.length;
         return Stack(children: [
-          if (Apple.on)
-            _JellyPill(index: index, cellWidth: w, height: height, child: pill)
-          else
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              left: 6 + w * index,
-              top: 6,
-              width: w,
-              height: height - 12,
-              child: pill,
-            ),
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            left: 6 + w * index,
+            top: 6,
+            width: w,
+            height: height - 12,
+            child: pill,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Row(children: [
@@ -212,9 +212,8 @@ class GlassTabBar extends StatelessWidget {
     );
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, bottom + 10),
-      // iOS 는 화이트 모드도 리퀴드 글래스
-      child: dark || Apple.on
-          ? Glass(tint: dark ? Sb.glassBar : const Color(0xB8FFFFFF), child: bar)
+      child: dark
+          ? Glass(tint: Sb.glassBar, child: bar)
           // 화이트: 흐림(BackdropFilter) 없이 불투명 흰 캡슐 + 옅은 그림자 — 그리기도 가볍다
           : DecoratedBox(
               key: const ValueKey('tab-bar-white'),
@@ -230,80 +229,351 @@ class GlassTabBar extends StatelessWidget {
   }
 }
 
-/// iOS 탭 알약: 젤리처럼 움직인다 — 가는 방향 쪽 끝이 먼저 쭉 늘어나고, 뒤쪽 끝이 탄력 있게 따라붙는다.
-class _JellyPill extends StatefulWidget {
-  const _JellyPill({required this.index, required this.cellWidth, required this.height, required this.child});
+/// iOS 리퀴드 글래스 탭바(iOS 26 · 2026-11-03 사용자 영상과 같은 모양).
+///  - 맑은 흰 유리: 뒤 화면(사진 · 목록)이 살짝 흐리게 비쳐 보이고, 가장자리에 빛 테. 다크 모드에서도 같은 흰 유리
+///  - 가만히 있을 때: 선택 칸 뒤에 옅은 회색 유리 알약, 아이콘은 검정(선택 칸은 채운 아이콘)
+///  - 탭을 누르거나 손가락으로 끌면: 알약이 탭바보다 큰 '투명 렌즈'로 부풀어 아래 아이콘을 확대해 보여 주고(RawMagnifier),
+///    위 · 아래 가장자리에 무지개빛(빛 굴절) 테가 생긴다. 탭바도 살짝 늘어난다.
+///  - 손가락으로 끌기: 렌즈가 손가락을 따라 다니고, 칸을 지날 때마다 '톡' 진동, 놓으면 가장 가까운 칸으로 붙으며 그 탭이 열린다.
+class _AppleTabBar extends StatefulWidget {
+  const _AppleTabBar({required this.tabs, required this.index, required this.onTap});
 
+  final List<GlassTab> tabs;
   final int index;
-  final double cellWidth;
-  final double height;
-  final Widget child;
+  final ValueChanged<int> onTap;
 
   @override
-  State<_JellyPill> createState() => _JellyPillState();
+  State<_AppleTabBar> createState() => _AppleTabBarState();
 }
 
-class _JellyPillState extends State<_JellyPill> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
-  late int _from = widget.index;
+class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixin {
+  static const _h = GlassTabBar.height;
+
+  /// 칸 이동 애니메이션(0 → 1)
+  late final AnimationController _move = AnimationController(vsync: this, duration: const Duration(milliseconds: 620))
+    ..value = 1;
+
+  /// 손가락으로 누르고 있는 동안 렌즈가 부푼 정도(0 → 1)
+  late final AnimationController _lift = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 260), reverseDuration: const Duration(milliseconds: 420));
+
+  /// 이동 출발 위치(칸 단위, 소수 가능 — 끌다 놓은 자리에서 출발할 때)
+  late double _fromPos = widget.index.toDouble();
+
+  /// 끄는 중인 렌즈 가운데(칸 단위). null 이면 끌지 않는 중
+  double? _dragPos;
+  double? _releasedAt;
+  double _cellW = 1;
 
   @override
-  void didUpdateWidget(_JellyPill old) {
+  void didUpdateWidget(_AppleTabBar old) {
     super.didUpdateWidget(old);
     if (old.index != widget.index) {
-      // 움직이는 중이면 지금 보이는 자리에서 다시 출발
-      _from = old.index;
-      _c.forward(from: 0);
+      _fromPos = _releasedAt ?? _currentPos(old.index);
+      _releasedAt = null;
+      _move.forward(from: 0);
     }
+  }
+
+  /// 지금 알약이 있는 자리(칸 단위) — 움직이는 중에 또 누르면 그 자리에서 다시 출발
+  double _currentPos(int oldIndex) {
+    final t = Curves.easeOutCubic.transform(_move.value);
+    return _fromPos + (oldIndex - _fromPos) * t;
   }
 
   @override
   void dispose() {
-    _c.dispose();
+    _move.dispose();
+    _lift.dispose();
     super.dispose();
+  }
+
+  double _posAt(double dx) => ((dx - 6) / _cellW - 0.5).clamp(0.0, widget.tabs.length - 1.0);
+
+  void _dragStart(DragStartDetails d) {
+    _dragPos = _posAt(d.localPosition.dx);
+    _lift.forward();
+    Apple.tick();
+    setState(() {});
+  }
+
+  void _dragUpdate(DragUpdateDetails d) {
+    final old = _dragPos;
+    final p = _posAt(d.localPosition.dx);
+    if (old != null && old.round() != p.round()) Apple.tick(); // 칸을 넘을 때마다 톡
+    setState(() => _dragPos = p);
+  }
+
+  void _dragEnd([DragEndDetails? d]) {
+    final p = _dragPos;
+    if (p == null) return;
+    // 빠르게 튕기면 그 방향 칸으로
+    final v = (d?.primaryVelocity ?? 0) / _cellW;
+    final target = (p + (v.abs() > 6 ? v.sign * 0.5 : 0)).round().clamp(0, widget.tabs.length - 1);
+    setState(() => _dragPos = null);
+    _lift.reverse();
+    if (target != widget.index) {
+      _releasedAt = p;
+      widget.onTap(target);
+    } else {
+      _fromPos = p; // 같은 칸이면 그 자리로 돌아가기만
+      _move.forward(from: 0);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, child) {
-        final w = widget.cellWidth;
-        final fromL = 6 + w * _from, toL = 6 + w * widget.index;
-        final t = _c.isAnimating || _c.value > 0 ? _c.value : 1.0;
-        final right = widget.index >= _from;
-        // 앞쪽 끝: 빠르게(easeOutCubic), 뒤쪽 끝: 늦게 출발해 살짝 튕기며(easeOutBack)
-        final lead = Curves.easeOutCubic.transform(t);
-        final trail = Curves.easeOutBack.transform(Interval(0.12, 1).transform(t));
-        final l = right ? fromL + (toL - fromL) * trail : fromL + (toL - fromL) * lead;
-        final r = right ? fromL + w + (toL - fromL) * lead : fromL + w + (toL - fromL) * trail;
-        final left = l < r ? l : r;
-        final width = (r - l).abs().clamp(w * 0.6, double.infinity);
-        // 움직이는 동안 살짝 납작해졌다 돌아온다
-        final squash = 1 - 0.08 * (4 * t * (1 - t));
-        return Positioned(
-          left: left,
-          top: 6 + (widget.height - 12) * (1 - squash) / 2,
-          width: width,
-          height: (widget.height - 12) * squash,
-          child: child!,
-        );
-      },
-      child: widget.child,
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottom + 10),
+      child: SizedBox(
+        height: _h,
+        child: LayoutBuilder(builder: (context, box) {
+          final n = widget.tabs.length;
+          final w = (box.maxWidth - 12) / n;
+          _cellW = w;
+          return GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragStart: _dragStart,
+            onHorizontalDragUpdate: _dragUpdate,
+            onHorizontalDragEnd: _dragEnd,
+            onHorizontalDragCancel: _dragEnd,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_move, _lift]),
+              builder: (context, _) {
+                final t = _move.value;
+                final moveM = _move.isAnimating ? math.sqrt((4 * t * (1 - t)).clamp(0.0, 1.0)) : 0.0;
+                final m = math.max(moveM, Curves.easeOut.transform(_lift.value));
+                double pillL, pillW;
+                final drag = _dragPos;
+                if (drag != null) {
+                  pillL = 6 + w * drag;
+                  pillW = w;
+                } else {
+                  // 젤리: 가는 쪽 끝이 먼저, 뒤쪽 끝이 튕기며 따라온다
+                  final fromL = 6 + w * _fromPos, toL = 6 + w * widget.index;
+                  final right = toL >= fromL;
+                  final lead = Curves.easeOutCubic.transform(t);
+                  final trail = Curves.easeOutBack.transform(const Interval(0.12, 1).transform(t));
+                  final l = fromL + (toL - fromL) * (right ? trail : lead);
+                  final r = fromL + w + (toL - fromL) * (right ? lead : trail);
+                  pillL = math.min(l, r);
+                  pillW = math.max((r - l).abs(), w * 0.6);
+                }
+                final cx = pillL + pillW / 2;
+                final lensW = pillW + 26 * m, lensH = (_h - 12) + 34 * m;
+                return Stack(clipBehavior: Clip.none, children: [
+                  // ① 맑은 흰 유리 탭바(누르는 동안 살짝 늘어남)
+                  Positioned.fill(
+                    child: Transform.scale(
+                      scaleX: 1 + 0.02 * m,
+                      scaleY: 1 + 0.06 * m,
+                      child: const _ClearGlassBar(),
+                    ),
+                  ),
+                  // ② 쉬고 있을 때의 회색 유리 알약(렌즈가 커지면 사라짐)
+                  Positioned(
+                    left: pillL,
+                    top: 6,
+                    width: pillW,
+                    height: _h - 12,
+                    child: Opacity(
+                      opacity: (1 - m * 1.6).clamp(0.0, 1.0),
+                      child: const DecoratedBox(
+                        key: ValueKey('tab-selected-pill'),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.all(Radius.circular(999)),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0x1A000000), Color(0x24000000)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // ③ 탭 버튼들(흰 유리 위라 아이콘은 검정)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Row(children: [
+                      for (var i = 0; i < n; i++)
+                        Expanded(
+                          child: _TabButton(
+                            tab: widget.tabs[i],
+                            selected: i == widget.index,
+                            onTap: () => widget.onTap(i),
+                            onLightGlass: true,
+                          ),
+                        ),
+                    ]),
+                  ),
+                  // ④ 누르거나 움직이는 동안: 아래를 확대해 보여 주는 투명 렌즈 + 무지개빛 테
+                  if (m > 0.02)
+                    Positioned(
+                      left: cx - lensW / 2,
+                      top: _h / 2 - lensH / 2,
+                      width: lensW,
+                      height: lensH,
+                      child: IgnorePointer(
+                        child: Stack(children: [
+                          RawMagnifier(
+                            size: Size(lensW, lensH),
+                            magnificationScale: 1 + 0.22 * m,
+                            decoration: MagnifierDecoration(
+                              shape: const StadiumBorder(),
+                              shadows: [
+                                BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12 * m), blurRadius: 18, offset: const Offset(0, 6)),
+                              ],
+                            ),
+                          ),
+                          // 렌즈 안쪽을 아주 살짝 밝게(유리 느낌)
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: ShapeDecoration(
+                                shape: const StadiumBorder(),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [Colors.white.withValues(alpha: 0.16 * m), Colors.white.withValues(alpha: 0.04 * m)],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned.fill(child: CustomPaint(painter: _LensRimPainter(m))),
+                        ]),
+                      ),
+                    ),
+                ]);
+              },
+            ),
+          );
+        }),
+      ),
     );
   }
 }
 
+/// 영상 속 탭바 유리: 흐림은 약하게(뒤가 비쳐 보이게) + 반투명 흰색 + 채도 ↑ + 왼쪽 위가 밝은 빛 테 + 옅은 그림자
+class _ClearGlassBar extends StatelessWidget {
+  const _ClearGlassBar();
+
+  @override
+  Widget build(BuildContext context) {
+    const br = BorderRadius.all(Radius.circular(999));
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        borderRadius: br,
+        boxShadow: [
+          BoxShadow(color: Color(0x26000000), blurRadius: 24, offset: Offset(0, 8)),
+          BoxShadow(color: Color(0x0F000000), blurRadius: 2, offset: Offset(0, 1)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: br,
+        child: BackdropFilter(
+          filter: ImageFilter.compose(
+            outer: const ColorFilter.matrix(_saturate),
+            inner: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          ),
+          child: CustomPaint(
+            foregroundPainter: _RimPainter(radius: 999, dark: false),
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: br,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  // 2026-11-03: 조금 더 투명하게(뒤가 더 비쳐 보이게)
+                  colors: [Color(0x99FFFFFF), Color(0x73FFFFFF), Color(0x85F4F5F7)],
+                  stops: [0, 0.5, 1],
+                ),
+              ),
+              child: SizedBox.expand(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 렌즈 가장자리: 얇은 흰 테 + 위 · 아래 가장자리에 맺히는 무지개빛(빛이 유리 두께에서 갈라짐) + 안쪽 그늘(두께감)
+class _LensRimPainter extends CustomPainter {
+  _LensRimPainter(this.m);
+
+  final double m;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rr = RRect.fromRectAndRadius(rect.deflate(1), Radius.circular(size.height / 2));
+    // 안쪽 그늘: 가장자리를 따라 아주 옅게
+    canvas.drawRRect(
+      rr.deflate(3),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6
+        ..color = Colors.black.withValues(alpha: 0.05 * m)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+    // 무지개빛: 위 · 아래 가운데에 몰리게(양옆은 투명)
+    final rainbow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.2
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.6)
+      ..shader = SweepGradient(
+        colors: [
+          const Color(0x00FFFFFF),
+          const Color(0xCC40C8FF),
+          const Color(0xCCFF4FD8),
+          const Color(0xCCFFD23F),
+          const Color(0x00FFFFFF),
+          const Color(0x00FFFFFF),
+          const Color(0xCCFFD23F),
+          const Color(0xCCFF4FD8),
+          const Color(0xCC40C8FF),
+          const Color(0x00FFFFFF),
+          const Color(0x00FFFFFF),
+        ],
+        stops: const [0.02, 0.12, 0.2, 0.28, 0.4, 0.6, 0.72, 0.8, 0.88, 0.98, 1.0],
+      ).createShader(rect);
+    canvas.saveLayer(rect, Paint()..color = Colors.white.withValues(alpha: m));
+    canvas.drawRRect(rr, rainbow);
+    canvas.restore();
+    // 얇은 흰 테(왼쪽 위가 더 밝게)
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white.withValues(alpha: 0.95 * m), Colors.white.withValues(alpha: 0.25 * m), Colors.white.withValues(alpha: 0.6 * m)],
+        ).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LensRimPainter old) => old.m != m;
+}
+
 class _TabButton extends StatelessWidget {
-  const _TabButton({required this.tab, required this.selected, required this.onTap});
+  const _TabButton({required this.tab, required this.selected, required this.onTap, this.onLightGlass = false});
 
   final GlassTab tab;
   final bool selected;
   final VoidCallback onTap;
 
+  /// iOS 흰 유리 탭바 위: 다크 모드여도 아이콘 · 글자를 검정으로
+  final bool onLightGlass;
+
   @override
   Widget build(BuildContext context) {
-    final color = selected ? Sb.navy : Sb.text2;
+    final color = onLightGlass
+        ? (selected ? const Color(0xFF111111) : const Color(0xFF2C2C2E))
+        : (selected ? Sb.navy : Sb.text2);
     Widget icon = Icon(selected ? tab.selectedIcon : tab.icon, size: 24, color: color);
     if (tab.badge != null) {
       icon = ValueListenableBuilder<int>(

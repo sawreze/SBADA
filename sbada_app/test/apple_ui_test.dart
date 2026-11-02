@@ -37,6 +37,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('iOS 탭바: 손가락으로 렌즈를 끌어다 놓으면 가장 가까운 칸이 열린다', (tester) async {
+    var index = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: StatefulBuilder(
+        builder: (context, setState) => Scaffold(
+          bottomNavigationBar: GlassTabBar(
+            tabs: const [
+              GlassTab(Icons.home_outlined, Icons.home, '홈'),
+              GlassTab(Icons.map_outlined, Icons.map, '지도'),
+              GlassTab(Icons.chat_outlined, Icons.chat, '채팅'),
+              GlassTab(Icons.person_outline, Icons.person, '나'),
+            ],
+            index: index,
+            onTap: (i) => setState(() => index = i),
+          ),
+        ),
+      ),
+    ));
+    final start = tester.getCenter(find.text('홈'));
+    final end = tester.getCenter(find.text('채팅'));
+    final g = await tester.startGesture(start);
+    await g.moveBy(const Offset(30, 0));
+    await tester.pump(const Duration(milliseconds: 100));
+    await g.moveTo(end);
+    await tester.pump(const Duration(milliseconds: 100));
+    // 끄는 동안 렌즈(확대경)가 떠 있다
+    expect(find.byType(RawMagnifier), findsOneWidget);
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(index, 2);
+    expect(find.byType(RawMagnifier), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('iOS: 목록 칸을 누르면 그 자리에서 화면이 퍼지고, 뒤로 가면 다시 줄어든다', (tester) async {
     await tester.pumpWidget(MaterialApp(
       builder: (context, child) =>
