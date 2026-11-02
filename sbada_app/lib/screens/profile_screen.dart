@@ -20,6 +20,7 @@ import 'notifications_screen.dart';
 import 'onboarding_screen.dart';
 import 'region_screen.dart';
 import 'settings_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 계정정보: 프로필 카드 + 묶음 메뉴(나의 거래 · 설정) + 로그아웃.
 /// 예전 아래쪽의 학습 선호도 · 연결 상태는 '앱 설정'으로 옮겼다(2026-10-21 사용자 요청).
@@ -70,7 +71,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _editPreferences(MeProfile me) async {
-    final changed = await Navigator.of(context).push<bool>(MaterialPageRoute(
+    final changed = await Navigator.of(context).push<bool>(appRoute(
       builder: (_) => OnboardingScreen(services: widget.services, mode: OnboardingMode.edit, initial: me),
     ));
     if (changed == true && mounted) {
@@ -111,7 +112,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await widget.services.logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(builder: (_) => LoginScreen(services: widget.services)),
+      appRoute<void>(builder: (_) => LoginScreen(services: widget.services)),
       (route) => false,
     );
   }
@@ -247,7 +248,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _push(Widget page) async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    await Navigator.of(context).push(appRoute<void>(builder: (_) => page));
     widget.services.refreshBadges();
     if (mounted) setState(_load);
   }
@@ -289,7 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         color: Colors.black45,
                         child: Center(
                           child: SizedBox(
-                              width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white)),
+                              width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white))),
                         ),
                       ),
                     ),

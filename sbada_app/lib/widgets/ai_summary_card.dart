@@ -54,7 +54,7 @@ class _AiSummaryCardState extends State<AiSummaryCard> {
               const SizedBox(height: 8),
               if (s == null)
                 Row(children: [
-                  SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Sb.mintText)),
+                  SizedBox(width: 14, height: 14, child: CircularProgressIndicator.adaptive(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Sb.mintText))),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text('AI가 이 물건을 요약하고 있어요(처음 한 번은 30초쯤 걸려요)',

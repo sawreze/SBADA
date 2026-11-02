@@ -19,6 +19,7 @@ import '../widgets/score_widgets.dart';
 import 'item_detail_screen.dart';
 import 'notifications_screen.dart';
 import 'region_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 홈: 위쪽 '내 동네 · 검색 · 알림', 칩 줄(AI 추천 · 최신 · 카테고리), 물건 목록
 ///   AI 추천 = GET /api/feed (추천 알고리즘 점수순)   최신 = GET /api/items?category=&q=
@@ -159,7 +160,7 @@ class _FeedScreenState extends State<FeedScreen> {
     if (picked == _swapRegion) return _swapToSecond();
     if (picked == _addRegion) {
       await Navigator.of(context)
-          .push(MaterialPageRoute<void>(builder: (_) => RegionScreen(services: widget.services, second: true)));
+          .push(appRoute<void>(builder: (_) => RegionScreen(services: widget.services, second: true)));
       return;
     }
     if (picked is! AreaLevel) return;
@@ -284,7 +285,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Future<void> _open(Item item) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      appRoute<void>(
         builder: (_) => ItemDetailScreen(services: widget.services, itemId: item.id),
       ),
     );
@@ -293,7 +294,7 @@ class _FeedScreenState extends State<FeedScreen> {
   Future<void> _openNotifications() async {
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute<void>(builder: (_) => NotificationsScreen(services: widget.services)));
+    ).push(appRoute<void>(builder: (_) => NotificationsScreen(services: widget.services)));
     widget.services.refreshBadges();
   }
 
@@ -498,7 +499,7 @@ class _FeedScreenState extends State<FeedScreen> {
         for (final d in regionWords)
           _suggestRow(leading: Icons.place_outlined, title: _highlight(d, q), onTap: () => _submit(d), onFill: () => fill(d)),
         if (list == null)
-          const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+          const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator.adaptive()))
         else if (productWords.isEmpty && regionWords.isEmpty && pastHits.isEmpty)
           Padding(
             padding: const EdgeInsets.all(24),

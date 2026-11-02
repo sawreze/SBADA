@@ -13,7 +13,9 @@ import '../widgets/common.dart';
 import '../widgets/glass.dart';
 import '../widgets/match_pin.dart';
 import '../widgets/net_image.dart';
+import '../widgets/pointer_shield.dart';
 import 'item_detail_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 동네지도: 우리 동네 주변의 교환 가능한 물건을 '매치도 핀'으로 보여 준다.
 ///  - 핀 = 위쪽 원에 올린 물건 사진 + 아래에 나와의 매치도 %(홈 AI 추천과 같은 점수, GET /api/feed).
@@ -205,7 +207,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _open(Item item) async {
     await Navigator.of(context)
-        .push(MaterialPageRoute<void>(builder: (_) => ItemDetailScreen(services: widget.services, itemId: item.id)));
+        .push(appRoute<void>(builder: (_) => ItemDetailScreen(services: widget.services, itemId: item.id)));
   }
 
   @override
@@ -274,7 +276,8 @@ class _MapScreenState extends State<MapScreen> {
                 left: 16,
                 right: 16,
                 top: top + 10,
-                child: Row(children: [
+                // 웹: 지도 iframe 이 클릭을 가져가지 않게 덮개(pointer_shield.dart)
+                child: PointerShield(child: Row(children: [
                   Expanded(
                     child: Glass(
                       tint: Sb.glassButton,
@@ -306,14 +309,14 @@ class _MapScreenState extends State<MapScreen> {
                       _focusMe();
                     }),
                   ),
-                ]),
+                ])),
               ),
               if (snap.hasError)
                 Positioned(
                   left: 16,
                   right: 16,
                   top: top + 70,
-                  child: ErrorView(error: snap.error!, onRetry: () => setState(_load)),
+                  child: PointerShield(child: ErrorView(error: snap.error!, onRetry: () => setState(_load))),
                 ),
               // ── 선택한 핀의 미리보기 카드 ──
               if (_selected != null)
@@ -321,13 +324,13 @@ class _MapScreenState extends State<MapScreen> {
                   left: 16,
                   right: 16,
                   bottom: c.maxHeight * 0.30 + 12,
-                  child: _preview(_selected!),
+                  child: PointerShield(child: _preview(_selected!)),
                 ),
               // ── 목록 왼쪽 위: 지도 확대 · 축소(핀 미리보기 카드가 열리면 그 위로) ──
               Positioned(
                 left: 16,
                 bottom: c.maxHeight * 0.30 + 12 + (_selected != null ? 112 : 0),
-                child: _zoomButtons(),
+                child: PointerShield(child: _zoomButtons()),
               ),
               // ── 아래: 끌어올리는 목록 시트 ──
               DraggableScrollableSheet(
@@ -336,7 +339,7 @@ class _MapScreenState extends State<MapScreen> {
                 maxChildSize: 0.88,
                 snap: true,
                 snapSizes: const [0.30, 0.88],
-                builder: (context, scroll) => _sheet(scroll, items, dong, snap.hasData),
+                builder: (context, scroll) => PointerShield(child: _sheet(scroll, items, dong, snap.hasData)),
               ),
             ]);
           });
@@ -418,7 +421,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _preview(Item item) {
-    return Glass(
+    return ExpandSource(child: PressScale(child: Glass(
       radius: 22,
       tint: Sb.isDark ? const Color(0xCC1E2126) : const Color(0xE6FFFFFF),
       child: Material(
@@ -454,7 +457,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
       ),
-    );
+    )));
   }
 
   Widget _sheet(ScrollController scroll, List<Item> nearFirst, String dong, bool loaded) {

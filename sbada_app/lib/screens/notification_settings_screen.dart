@@ -62,7 +62,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       subtitle: subtitle,
       showChevron: false,
       onTap: _saving ? null : () => _change(key, !value),
-      trailing: Switch(
+      trailing: Switch.adaptive(
         value: value,
         activeThumbColor: Sb.onAccent,
         activeTrackColor: Sb.blue,

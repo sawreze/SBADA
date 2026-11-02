@@ -6,11 +6,14 @@ import 'services/app_services.dart';
 import 'services/push_service.dart';
 import 'services/theme_controller.dart';
 import 'theme/app_theme.dart';
+import 'util/apple.dart';
+import 'widgets/expand_route.dart';
 
 /// 스바다 앱 시작점.
 ///   flutter run -d emulator-5554 --dart-define=API_BASE_URL=http://10.0.2.2:8097
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  Apple.init(); // 아이폰이면(또는 웹 ?ios=1) iOS 전용 디자인 켜기
   await ThemeController.load(); // 저장해 둔 다크/화이트 모드
   await PushService.init(); // FCM(푸시): google-services.json 이 없으면 조용히 꺼짐
   // 실행 화면 그림(곰 · 손)을 미리 불러 두기 — 서비스 준비와 같이 기다린다
@@ -45,7 +48,7 @@ class _SbadaAppState extends State<SbadaApp> {
       _handlingUnauthorized = true;
       await widget.services.logout();
       rootNavigator.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute<void>(
+        appRoute<void>(
             builder: (_) => LoginScreen(services: widget.services, notice: '로그인이 만료되었어요. 다시 로그인해 주세요.')),
         (route) => false,
       );
@@ -74,7 +77,25 @@ class _SbadaAppState extends State<SbadaApp> {
       debugShowCheckedModeBanner: false,
       navigatorKey: rootNavigator,
       theme: buildTheme(),
+      scrollBehavior: const _SbScroll(),
+      // iOS: 손가락이 닿은 목록 칸을 기억해 두었다가, 열리는 화면이 그 칸에서 퍼져 나오게 한다
+      builder: (context, child) => Apple.on
+          ? Listener(behavior: HitTestBehavior.translucent, onPointerDown: (e) => ExpandOrigin.capture(e.position), child: child)
+          : child!,
       home: widget.home ?? SplashGate(services: widget.services),
     );
   }
+}
+
+/// iOS: 끝에서 고무줄처럼 튕기는 스크롤(아이폰 기본 느낌). 안드로이드는 지금 그대로.
+class _SbScroll extends MaterialScrollBehavior {
+  const _SbScroll();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      Apple.on ? const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()) : super.getScrollPhysics(context);
+
+  @override
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) =>
+      Apple.on ? child : super.buildOverscrollIndicator(context, child, details);
 }

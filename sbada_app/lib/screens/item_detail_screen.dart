@@ -20,6 +20,7 @@ import 'chat_room_screen.dart';
 import 'likes_screen.dart';
 import 'match_screen.dart';
 import 'place_map_screen.dart';
+import '../widgets/expand_route.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   const ItemDetailScreen({super.key, required this.services, required this.itemId});
@@ -71,7 +72,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
   Future<void> _openOther(Item other) async {
     await Navigator.of(context)
-        .push(MaterialPageRoute<void>(builder: (_) => ItemDetailScreen(services: widget.services, itemId: other.id)));
+        .push(appRoute<void>(builder: (_) => ItemDetailScreen(services: widget.services, itemId: other.id)));
   }
 
   bool _isMine(Item item) => item.owner.id == widget.services.session.user?.id;
@@ -118,7 +119,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     try {
       final room = await widget.services.chats.open(item.id);
       if (!mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute<void>(
+      await Navigator.of(context).push(appRoute<void>(
           builder: (_) => ChatRoomScreen(services: widget.services, roomId: room.id)));
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
@@ -341,7 +342,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Widget _similarCard(Item it) {
-    return InkWell(
+    return ExpandSource(child: PressScale(child: InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => _openOther(it),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -357,7 +358,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         Text('${it.owner.region.split(' ').last} · ${timeAgo(it.createdAt)}',
             maxLines: 1, overflow: TextOverflow.ellipsis, style: sbCaption),
       ]),
-    );
+    )));
   }
 
   /// 디자인 시안의 '매칭 점수' 카드: 내 ○○와 매칭 N점 + 요소별 막대(가격 40% · 내 취향 25% · 서로 원함 20% · 신선도 10% · 상태 5%)
@@ -459,7 +460,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             flex: 2,
             child: FilledButton.icon(
               onPressed: item.isAvailable
-                  ? () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  ? () => Navigator.of(context).push(appRoute<void>(
                       builder: (_) => MatchScreen(services: widget.services, item: item)))
                   : null,
               style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
@@ -491,7 +492,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             services: widget.services,
             itemId: item.id,
             onOpenList: () => Navigator.of(context)
-                .push(MaterialPageRoute<void>(builder: (_) => LikesScreen(services: widget.services))),
+                .push(appRoute<void>(builder: (_) => LikesScreen(services: widget.services))),
           ),
           const SizedBox(width: 4),
           Expanded(

@@ -4,6 +4,7 @@ import '../models/item.dart';
 import '../theme/app_theme.dart';
 import '../util/format.dart';
 import 'common.dart';
+import 'expand_route.dart';
 import 'net_image.dart';
 
 /// 목록의 물건 한 줄(디자인 '홈' 시안):
@@ -22,7 +23,8 @@ class ItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dong = item.owner.region.split(' ').last;
-    return InkWell(
+    // iOS: 누르면 살짝 눌리고(PressScale), 열리는 화면은 이 칸 자리에서 퍼져 나온다(ExpandSource)
+    return ExpandSource(child: PressScale(child: InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -93,7 +95,7 @@ class ItemTile extends StatelessWidget {
           ),
         ]),
       ),
-    );
+    )));
   }
 }
 

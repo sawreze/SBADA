@@ -36,14 +36,17 @@ public class NotificationService {
     private final AppUserRepository users;
     private final RealtimeHub hub;
     private final FcmPushSender fcm;
+    private final ApnsPushSender apns;
 
     public NotificationService(NotificationRepository notifications, DeviceTokenRepository devices,
-                               AppUserRepository users, RealtimeHub hub, FcmPushSender fcm) {
+                               AppUserRepository users, RealtimeHub hub, FcmPushSender fcm,
+                               ApnsPushSender apns) {
         this.notifications = notifications;
         this.devices = devices;
         this.users = users;
         this.hub = hub;
         this.fcm = fcm;
+        this.apns = apns;
     }
 
     /** 알림 만들기: 저장 + (커밋 후) 실시간 또는 푸시 전달 */
@@ -69,15 +72,21 @@ public class NotificationService {
             if (view.refId() != null) {
                 data.put("refId", view.refId().toString());
             }
-            fcm.sendAsync(userId, view.title(), view.body(), data);
+            push(userId, view.title(), view.body(), data);
         }
     }
 
     /** 채팅처럼 알림함에 저장하지 않는 알림: 접속 중이 아니면 FCM 으로만 보낸다. */
     public void pushIfOffline(long userId, String title, String body, Map<String, String> data) {
         if (!hub.isOnline(userId) && wants(userId, NotificationType.CHAT_MESSAGE.settingKey())) {
-            fcm.sendAsync(userId, title, body, data);
+            push(userId, title, body, data);
         }
+    }
+
+    /** 앱이 꺼져 있을 때: 안드로이드 → FCM, 아이폰 → APNs 직접(각자 설정이 없으면 조용히 건너뜀) */
+    private void push(long userId, String title, String body, Map<String, String> data) {
+        fcm.sendAsync(userId, title, body, data);
+        apns.sendAsync(userId, title, body, data);
     }
 
     /** 알림 설정에서 이 종류를 켜 두었는지(설정에 없는 종류 · 없는 사용자 처리는 AppUser.wantsNotification) */
@@ -91,7 +100,7 @@ public class NotificationService {
         AppUser u = users.findById(userId)
                 .orElseThrow(() -> new ApiException(401, "TOKEN_INVALID", "사용자를 확인할 수 없습니다."));
         return new NotificationDtos.NotificationSettings(u.isNotifyLike(), u.isNotifyChat(), u.isNotifyExchange(),
-                fcm.isEnabled());
+                fcm.isEnabled() || apns.isEnabled());
     }
 
     /** PUT /api/me/notification-settings — 보낸 값만 바뀐다(변경 감지로 UPDATE) */
@@ -156,5 +165,10 @@ public class NotificationService {
 
     public boolean fcmEnabled() {
         return fcm.isEnabled();
+    }
+
+    /** 이 platform 의 기기로 실제 푸시를 보낼 수 있는지(POST /api/devices 응답 fcmEnabled 에 쓴다) */
+    public boolean pushEnabledFor(String platform) {
+        return ApnsPushSender.PLATFORM.equals(platform) ? apns.isEnabled() : fcm.isEnabled();
     }
 }

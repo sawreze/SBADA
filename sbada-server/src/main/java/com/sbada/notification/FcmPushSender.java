@@ -88,7 +88,8 @@ public class FcmPushSender implements DisposableBean {
         if (!isEnabled()) {
             return;
         }
-        List<String> targets = tokens.tokensOf(userId);
+        // APNs 직접 토큰(ios-apns)은 ApnsPushSender 가 보낸다
+        List<String> targets = tokens.tokensExcept(userId, ApnsPushSender.PLATFORM);
         if (targets.isEmpty()) {
             return;
         }

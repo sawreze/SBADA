@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/item_card.dart';
 import 'item_detail_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 관심목록(찜한 물건). 계정정보 메뉴 3번째 · 찜 팝업의 '관심목록 보기'에서 연다.
 /// GET /api/me/likes(최근 찜한 순). 오른쪽 하트를 누르면 찜 해제(DELETE /api/items/{id}/like).
@@ -38,7 +39,7 @@ class _LikesScreenState extends State<LikesScreen> {
 
   Future<void> _open(Item item) async {
     await Navigator.of(context)
-        .push(MaterialPageRoute<void>(builder: (_) => ItemDetailScreen(services: widget.services, itemId: item.id)));
+        .push(appRoute<void>(builder: (_) => ItemDetailScreen(services: widget.services, itemId: item.id)));
     if (mounted) setState(_load); // 상세에서 찜을 풀었을 수 있다
   }
 

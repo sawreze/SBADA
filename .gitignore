@@ -35,3 +35,6 @@ Secrets.xcconfig
 training/out-final/
 training/out-vision/
 __pycache__/
+
+# Apple APNs 키(.p8) — 절대 올리지 않는다
+*.p8

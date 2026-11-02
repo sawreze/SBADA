@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'signup_screen.dart';
 import 'splash_gate.dart';
+import '../widgets/expand_route.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.services, this.notice});
@@ -148,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _loading ? null : _login,
                       child: _loading
                           ? const SizedBox(
-                              width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Sb.onAccent))
+                              width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
                           : const Text('로그인'),
                     ),
                     const SizedBox(height: 16),
@@ -168,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text('처음이신가요?', style: TextStyle(fontSize: 15, color: Sb.text3)),
                       TextButton(
                         onPressed: () => Navigator.of(context)
-                            .push(MaterialPageRoute<void>(builder: (_) => SignupScreen(services: widget.services))),
+                            .push(appRoute<void>(builder: (_) => SignupScreen(services: widget.services))),
                         style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
                         child: const Text('회원가입', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                       ),
@@ -215,7 +216,7 @@ class KakaoStartButton extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         child: loading
-            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: _label))
+            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(_label)))
             : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.chat_bubble, size: 20, color: _label),
                 SizedBox(width: 8),

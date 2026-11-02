@@ -21,6 +21,14 @@ public interface DeviceTokenRepository extends JpaRepository<DeviceToken, Long> 
     @Query("select d.token from DeviceToken d where d.user.id = :userId")
     List<String> tokensOf(@Param("userId") long userId);
 
+    /** 이 사용자의 특정 platform 기기 토큰만(ios-apns = Apple 직접 푸시) */
+    @Query("select d.token from DeviceToken d where d.user.id = :userId and d.platform = :platform")
+    List<String> tokensOf(@Param("userId") long userId, @Param("platform") String platform);
+
+    /** ios-apns 를 뺀 토큰(FCM 으로 보낼 것: android · Firebase 를 쓰는 ios) */
+    @Query("select d.token from DeviceToken d where d.user.id = :userId and (d.platform is null or d.platform <> :platform)")
+    List<String> tokensExcept(@Param("userId") long userId, @Param("platform") String platform);
+
     @Transactional
     void deleteByToken(String token);
 }

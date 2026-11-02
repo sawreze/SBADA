@@ -12,6 +12,7 @@ import '../widgets/common.dart';
 import '../widgets/exchange_card.dart';
 import 'chat_room_screen.dart';
 import 'item_detail_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 알림함 + 받은 교환 요청(수락/거절) + 보낸 교환 요청(취소)
 class NotificationsScreen extends StatefulWidget {
@@ -77,7 +78,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
     if (n.refType == 'ITEM' && n.refId != null) {
       await Navigator.of(context)
-          .push(MaterialPageRoute<void>(builder: (_) => ItemDetailScreen(services: s, itemId: n.refId!)));
+          .push(appRoute<void>(builder: (_) => ItemDetailScreen(services: s, itemId: n.refId!)));
     } else if (n.refType == 'EXCHANGE' && n.refId != null) {
       await _showExchange(n.refId!);
     }
@@ -137,7 +138,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ? null
           : () {
               closeSheet?.call();
-              Navigator.of(context).push(MaterialPageRoute<void>(
+              Navigator.of(context).push(appRoute<void>(
                   builder: (_) => ChatRoomScreen(services: s, roomId: ex.chatRoomId!)));
             },
     );

@@ -5,6 +5,7 @@ import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import 'common.dart';
 import 'like_toast.dart';
+import '../util/apple.dart';
 
 /// 상세 화면 왼쪽 아래 찜 하트.
 ///  - 빈 하트 ↔ 채운 하트(민트). 누르면 1.0 → 1.3 → 1.0 으로 통통 튄다.
@@ -36,6 +37,7 @@ class _LikeHeartButtonState extends State<LikeHeartButton> with SingleTickerProv
   }
 
   Future<void> _tap() async {
+    Apple.tap(); // iOS: 찜 누를 때 톡 진동
     if (_busy) return;
     _busy = true;
     final willLike = !widget.services.likedIds.value.contains(widget.itemId);

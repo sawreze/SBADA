@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/exchange_card.dart';
 import 'chat_room_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 교환 내역: 끝난 교환(성사 · 거절 · 취소)을 받은 것 · 보낸 것 구분 없이 최근 순으로.
 /// 새 API 없이 기존 GET /api/exchanges?box=received · sent 를 합친다(대기 중 REQUESTED 는 받은/보낸 요청 메뉴에 있음).
@@ -111,7 +112,7 @@ class _ExchangeHistoryScreenState extends State<ExchangeHistoryScreen> {
                       myId: s.session.user?.id ?? -1,
                       onOpenChat: e.chatRoomId == null
                           ? null
-                          : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                          : () => Navigator.of(context).push(appRoute<void>(
                               builder: (_) => ChatRoomScreen(services: s, roomId: e.chatRoomId!))),
                     );
                   },

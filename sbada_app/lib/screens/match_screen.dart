@@ -11,6 +11,7 @@ import '../widgets/item_card.dart';
 import '../widgets/net_image.dart';
 import '../widgets/score_widgets.dart';
 import 'item_detail_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 내 물건과 '비슷한 가격대'의 교환 후보(GET /api/items/{id}/matches)
 /// 점수 = 0.40 가격 유사도 + 0.25 내 선호 + 0.20 상대 선호 + 0.10 신선도 + 0.05 상태 유사도
@@ -155,7 +156,7 @@ class _MatchScreenState extends State<MatchScreen> {
     return Column(children: [
       ItemTile(
         item: rec.item,
-        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+        onTap: () => Navigator.of(context).push(appRoute<void>(
             builder: (_) => ItemDetailScreen(services: widget.services, itemId: rec.item.id))),
         trailing: GestureDetector(
           onTap: () => showScoreSheet(context, rec, title: '매칭 점수 ${rec.score}점'),

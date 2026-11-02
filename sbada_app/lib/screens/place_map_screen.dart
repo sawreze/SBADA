@@ -7,6 +7,8 @@ import '../models/item.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
+import '../widgets/pointer_shield.dart';
+import '../widgets/expand_route.dart';
 
 /// 상세 화면 '거래 희망 장소' 카드: 작은 지도 + 물건 위치 핀 + 오른쪽 아래 '지도 보기'.
 ///  - 거래 장소 = 등록자 동네(물건 위치는 동네 안에서 살짝 흩어 놓은 점, 정확한 집 위치는 드러내지 않는다).
@@ -26,7 +28,7 @@ class _TradePlaceCardState extends State<TradePlaceCard> {
   bool _failed = false;
 
   void _openFull() {
-    Navigator.of(context).push(MaterialPageRoute<void>(
+    Navigator.of(context).push(appRoute<void>(
         builder: (_) => PlaceMapScreen(services: widget.services, item: widget.item)));
   }
 
@@ -195,7 +197,7 @@ class _PlaceMapScreenState extends State<PlaceMapScreen> {
           left: 12,
           right: 16,
           top: top + 10,
-          child: Row(children: [
+          child: PointerShield(child: Row(children: [
             GlassIconButton(
               icon: Icons.arrow_back_rounded,
               tooltip: '뒤로',
@@ -222,7 +224,7 @@ class _PlaceMapScreenState extends State<PlaceMapScreen> {
                 ),
               ),
             ),
-          ]),
+          ])),
         ),
       ]),
     );

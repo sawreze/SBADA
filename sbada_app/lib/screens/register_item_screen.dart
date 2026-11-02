@@ -13,6 +13,7 @@ import '../util/format.dart';
 import '../widgets/common.dart';
 import '../widgets/item_card.dart';
 import 'match_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 물건 올리기: ① 사진 찍기 → ② AI(Gemma)가 가격 분석 → ③ 확인·수정 → ④ 등록 → 비슷한 가격대 매칭
 class RegisterItemScreen extends StatefulWidget {
@@ -166,7 +167,7 @@ class _RegisterItemScreenState extends State<RegisterItemScreen> {
       );
       if (!mounted) return;
       widget.services.itemsChanged.value++;
-      await Navigator.of(context).pushReplacement(MaterialPageRoute<bool>(
+      await Navigator.of(context).pushReplacement(appRoute<bool>(
         builder: (_) => MatchScreen(services: widget.services, item: item, justCreated: true),
       ));
     } on ApiException catch (e) {
@@ -290,7 +291,7 @@ class _RegisterItemScreenState extends State<RegisterItemScreen> {
                 child: i < _analyzeStage
                     ? Icon(Icons.check_circle, color: Sb.green, size: 22)
                     : i == _analyzeStage
-                        ? const CircularProgressIndicator(strokeWidth: 2.5)
+                        ? const CircularProgressIndicator.adaptive(strokeWidth: 2.5)
                         : Icon(Icons.circle_outlined, color: Sb.line, size: 22),
               ),
               const SizedBox(width: 12),
@@ -381,7 +382,7 @@ class _RegisterItemScreenState extends State<RegisterItemScreen> {
         child: FilledButton(
           onPressed: _saving ? null : _submit,
           child: _saving
-              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Sb.onAccent))
+              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
               : Text(_hintsChanged ? '다시 분석하고 올리기' : '이 가격으로 올리기'),
         ),
       ),

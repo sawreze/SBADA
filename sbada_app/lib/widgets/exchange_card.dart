@@ -86,7 +86,7 @@ class ExchangeCard extends StatelessWidget {
               child: FilledButton(
                 onPressed: busy ? null : onAccept,
                 child: busy
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Sb.onAccent))
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
                     : const Text('수락하고 교환하기'),
               ),
             ),

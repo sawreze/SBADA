@@ -7,6 +7,7 @@ import '../widgets/common.dart';
 import '../widgets/item_card.dart';
 import 'item_detail_screen.dart';
 import 'match_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 내 물건 목록. 물건을 누르면 '비슷한 가격대 매칭'이 열린다.
 class MyItemsScreen extends StatefulWidget {
@@ -71,7 +72,7 @@ class _MyItemsScreenState extends State<MyItemsScreen> {
                 final item = items[i];
                 return ItemTile(
                   item: item,
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  onTap: () => Navigator.of(context).push(appRoute<void>(
                     builder: (_) => item.isAvailable
                         ? MatchScreen(services: widget.services, item: item)
                         : ItemDetailScreen(services: widget.services, itemId: item.id),

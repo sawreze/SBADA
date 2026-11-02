@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../util/format.dart';
 import '../widgets/common.dart';
 import 'chat_room_screen.dart';
+import '../widgets/expand_route.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key, required this.services});
@@ -85,7 +86,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void _load() => _future = widget.services.chats.rooms();
 
   Future<void> _open(ChatRoom room) async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(
+    await Navigator.of(context).push(appRoute<void>(
         builder: (_) => ChatRoomScreen(services: widget.services, roomId: room.id)));
     if (mounted) setState(_load);
     unawaited(widget.services.refreshBadges());
@@ -144,7 +145,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget _roomRow(ChatRoom r) {
     final unread = r.unread > 0;
     final dong = r.partner.region.isEmpty ? '' : '${r.partner.region.split(' ').last} · ';
-    return InkWell(
+    return ExpandSource(child: PressScale(child: InkWell(
       onTap: () => _open(r),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -195,6 +196,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ],
         ]),
       ),
-    );
+    )));
   }
 }

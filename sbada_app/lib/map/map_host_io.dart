@@ -3,7 +3,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 /// 앱(Android)용: WebView 에 HTML 을 띄운다. 자바스크립트 채널 이름은 'Sbada'.
 class MapHost {
-  MapHost({required String html, required void Function(String message) onMessage}) {
+  // interactive 는 웹용(앱에서는 IgnorePointer 가 WebView 터치를 막아 줘서 쓰지 않음)
+  MapHost({required String html, required void Function(String message) onMessage, bool interactive = true}) {
     _web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF1B1E23))

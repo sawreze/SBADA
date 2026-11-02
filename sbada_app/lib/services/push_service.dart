@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../repositories/notification_repository.dart';
 
@@ -69,12 +70,22 @@ class PushService {
     return _firebaseReady;
   }
 
+  /// 아이폰 APNs 직접 연결(ios/Runner/AppDelegate.swift 의 'sbada/apns')
+  static const _apns = MethodChannel('sbada/apns');
+
+  /// 서버에 등록할 platform 값(서버 ApnsPushSender.PLATFORM 과 같아야 한다)
+  static const apnsPlatform = 'ios-apns';
+
+  /// 아이폰은 Firebase 없이 APNs 로 직접 받는다
+  bool get _useApns => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
   /// 로그인 뒤 홈이 열릴 때. 실패해도 앱은 WebSocket 알림으로 계속 동작한다.
   Future<void> start() async {
     if (kIsWeb) {
       state.value = PushState.unsupported;
       return;
     }
+    if (_useApns) return _startApns();
     if (!_firebaseReady) {
       state.value = PushState.notConfigured;
       return;
@@ -107,9 +118,41 @@ class PushService {
     }
   }
 
-  Future<void> _register(String token) async {
+  /// 아이폰: 알림 권한 → APNs 기기 토큰 → POST /api/devices {platform: ios-apns}.
+  /// 알림을 누르면 iOS 가 'opened' 로 알려 주고, 꺼진 앱이 푸시로 켜졌으면 initialOpened 로 가져온다.
+  Future<void> _startApns() async {
+    _apns.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'token': // 토큰이 바뀜(앱 재설치 · 복원 등) → 다시 등록
+          final t = call.arguments as String?;
+          if (t != null && t.isNotEmpty) await _register(t, apnsPlatform);
+        case 'opened':
+          opened.value = Map<String, dynamic>.from(call.arguments as Map);
+      }
+    });
+    try {
+      final initial = await _apns.invokeMethod<Map<Object?, Object?>>('initialOpened');
+      if (initial != null && initial.isNotEmpty) opened.value = initial.map((k, v) => MapEntry('$k', v));
+    } catch (_) {}
+    try {
+      final token = await _apns.invokeMethod<String>('register');
+      if (token == null || token.isEmpty) {
+        state.value = PushState.failed;
+        return;
+      }
+      await _register(token, apnsPlatform);
+    } on PlatformException catch (e) {
+      debugPrint('APNs 등록 실패: ${e.code} ${e.message}');
+      state.value = e.code == 'PERMISSION_DENIED' ? PushState.denied : PushState.failed;
+    } on MissingPluginException {
+      state.value = PushState.failed;
+    }
+  }
+
+  Future<void> _register(String token, [String? platform]) async {
     _token = token;
-    serverReady.value = await notifications.registerDevice(token, defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android');
+    serverReady.value = await notifications.registerDevice(
+        token, platform ?? (defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android'));
     state.value = PushState.registered;
   }
 
@@ -128,12 +171,16 @@ class PushService {
   /// 화면에 보여 줄 한 줄 설명
   String get description => switch (state.value) {
         PushState.registered => serverReady.value
-            ? '앱이 꺼져 있어도 푸시로 받아요(FCM)'
-            : '기기 등록은 됐어요 · 서버 Firebase 설정 전이라 앱이 켜져 있을 때만 받아요',
+            ? (_useApns ? '앱이 꺼져 있어도 푸시로 받아요(APNs)' : '앱이 꺼져 있어도 푸시로 받아요(FCM)')
+            : (_useApns
+                ? '기기 등록은 됐어요 · 서버 APNs 키 설정 전이라 앱이 켜져 있을 때만 받아요'
+                : '기기 등록은 됐어요 · 서버 Firebase 설정 전이라 앱이 켜져 있을 때만 받아요'),
         PushState.notConfigured => 'Firebase 설정 전이라 앱이 켜져 있을 때만 받아요',
         PushState.denied => '알림 권한이 꺼져 있어요. 휴대폰 설정에서 켜 주세요',
         PushState.unsupported => '웹 화면은 앱이 켜져 있을 때만 받아요',
-        PushState.failed => '푸시 등록에 실패했어요. 앱이 켜져 있을 때만 받아요',
+        PushState.failed => _useApns
+            ? 'APNs 등록에 실패했어요(유료 Apple 개발자 계정 · Push 권한 필요). 앱이 켜져 있을 때만 받아요'
+            : '푸시 등록에 실패했어요. 앱이 켜져 있을 때만 받아요',
         PushState.unknown => '확인 중…',
       };
 }

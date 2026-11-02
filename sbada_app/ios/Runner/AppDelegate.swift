@@ -9,17 +9,29 @@ import CoreLocation
 ///  - MethodChannel("sbada/config"): kakaoNativeAppKey → 카카오 네이티브 앱 키
 ///      키는 소스에 없다: ios/Flutter/Secrets.xcconfig(Git 제외) → Info.plist 'KakaoNativeAppKey' → 여기
 ///  - MethodChannel("sbada/location"): current → GPS 로 지금 위치 {lat, lng} 한 번(SbadaLocator, 패키지 없이 CoreLocation)
+///  - MethodChannel("sbada/apns"): Apple APNs 직접 푸시(Firebase 없이)
+///      register → 알림 권한 → registerForRemoteNotifications → APNs 기기 토큰(64자리 16진수) 을 돌려준다
+///      initialOpened → 앱이 꺼져 있다가 푸시를 눌러 켜졌으면 그 알림의 값 {type, refType, refId}
+///      (iOS → Dart) token: 토큰이 바뀌면 다시 알림 · opened: 알림을 누름
 ///  - 앱이 켜져 있을 때도 알림 배너가 보이게 UNUserNotificationCenter 의 delegate 를 맡는다
 ///    (Android 와 같은 동작: 앱 사용 중 교환 요청 · 채팅 알림을 위에 띄움)
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let locator = SbadaLocator()
+  private var apns: FlutterMethodChannel?
+  private var pendingToken: FlutterResult?
+  private var lastToken: String?
+  private var launchPush: [String: String]?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     UNUserNotificationCenter.current().delegate = self
+    // 꺼진 앱을 푸시를 눌러 켰을 때(옛 방식 경로 — 새 방식은 아래 didReceive 로 온다)
+    if let info = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+      launchPush = AppDelegate.appData(info)
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -50,6 +62,38 @@ import CoreLocation
       }
     }
 
+    let apnsChannel = FlutterMethodChannel(name: "sbada/apns", binaryMessenger: messenger)
+    apns = apnsChannel
+    apnsChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else { result(nil); return }
+      switch call.method {
+      case "register":
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+          DispatchQueue.main.async {
+            guard granted else {
+              result(FlutterError(code: "PERMISSION_DENIED", message: "알림 권한이 없어요", details: nil)); return
+            }
+            if let t = self.lastToken { result(t); return }
+            self.pendingToken?(nil)
+            self.pendingToken = result
+            UIApplication.shared.registerForRemoteNotifications()
+            // 15초 안에 토큰이 안 오면(네트워크 · 서명 문제) 실패로 끝낸다
+            DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+              if let pending = self.pendingToken {
+                self.pendingToken = nil
+                pending(FlutterError(code: "APNS_TIMEOUT", message: "APNs 토큰을 받지 못했어요", details: nil))
+              }
+            }
+          }
+        }
+      case "initialOpened":
+        result(self.launchPush)
+        self.launchPush = nil
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     FlutterMethodChannel(name: "sbada/config", binaryMessenger: messenger).setMethodCallHandler { call, result in
       switch call.method {
       case "kakaoNativeAppKey":
@@ -72,6 +116,57 @@ import CoreLocation
     let raw = (Bundle.main.object(forInfoDictionaryKey: "KakaoNativeAppKey") as? String ?? "")
       .trimmingCharacters(in: .whitespacesAndNewlines)
     return raw.contains("$(") ? "" : raw
+  }
+
+  /// APNs 가 기기 토큰을 줬다: Data → 16진수 문자열(서버가 https://api.push.apple.com/3/device/{이 값} 으로 보낸다)
+  override func application(_ application: UIApplication,
+                             didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+    let changed = lastToken != nil && lastToken != token
+    lastToken = token
+    if let pending = pendingToken {
+      pendingToken = nil
+      pending(token)
+    } else if changed {
+      apns?.invokeMethod("token", arguments: token)
+    }
+    super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+  }
+
+  override func application(_ application: UIApplication,
+                             didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    if let pending = pendingToken {
+      pendingToken = nil
+      pending(FlutterError(code: "APNS_FAILED", message: error.localizedDescription, details: nil))
+    }
+    super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+  }
+
+  /// 알림을 눌렀다: 앱 데이터(type · refType · refId)를 Dart 에 넘겨 알맞은 화면을 연다
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    let data = AppDelegate.appData(response.notification.request.content.userInfo)
+    if data["type"] != nil {
+      if let channel = apns {
+        channel.invokeMethod("opened", arguments: data)
+      } else {
+        launchPush = data // Flutter 가 아직 준비 전 → initialOpened 로 가져간다
+      }
+    }
+    super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
+  }
+
+  /// 푸시 본문에서 aps 를 뺀 나머지(문자열 값만)
+  private static func appData(_ info: [AnyHashable: Any]) -> [String: String] {
+    var out: [String: String] = [:]
+    for (k, v) in info {
+      guard let key = k as? String, key != "aps" else { continue }
+      out[key] = "\(v)"
+    }
+    return out
   }
 
   /// 앱이 켜져 있을 때 온 알림도 배너로 보여 준다

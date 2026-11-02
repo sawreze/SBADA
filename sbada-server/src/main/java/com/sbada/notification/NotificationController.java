@@ -93,6 +93,7 @@ public class NotificationController {
      *
      * 요청 본문 — NotificationDtos.DeviceRequest
      *   {"token": "fcm-기기-토큰-문자열", "platform": "android"}   (platform 생략 시 "android")
+     *   아이폰 APNs 직접: {"token": "64자리-16진수-APNs-기기-토큰", "platform": "ios-apns"}
      *   같은 토큰이 이미 있으면 새 행을 만들지 않고 주인만 바꾼다(한 폰에서 계정을 바꿔 로그인한 경우).
      *
      * 응답 200 — {"registered": true, "fcmEnabled": false}
@@ -102,9 +103,10 @@ public class NotificationController {
     @PostMapping("/api/devices")
     public ResponseEntity<Map<String, Object>> device(@Valid @RequestBody NotificationDtos.DeviceRequest input,
                                                       Authentication auth) {
-        service.registerDevice((Long) auth.getPrincipal(), input.token().trim(),
-                input.platform() == null ? "android" : input.platform());
-        return ResponseEntity.ok(Map.of("registered", true, "fcmEnabled", service.fcmEnabled()));
+        String platform = input.platform() == null ? "android" : input.platform();
+        service.registerDevice((Long) auth.getPrincipal(), input.token().trim(), platform);
+        // fcmEnabled(이름은 예전 그대로): 이 기기 종류로 실제 푸시를 보낼 수 있는지 — ios-apns 면 APNs 키, 그 밖은 Firebase
+        return ResponseEntity.ok(Map.of("registered", true, "fcmEnabled", service.pushEnabledFor(platform)));
     }
 
     /**

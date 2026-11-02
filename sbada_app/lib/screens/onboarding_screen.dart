@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -12,6 +13,7 @@ import '../widgets/common.dart';
 import '../widgets/gps_dong_button.dart';
 import 'login_screen.dart';
 import 'splash_gate.dart';
+import '../widgets/expand_route.dart';
 
 enum OnboardingMode {
   /// 앱을 처음 설치했을 때(로그인 전) → 고른 값은 기기에 두었다가 로그인 후 서버로 보낸다
@@ -114,7 +116,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await s.session.store.write(Session.pendingPrefsKey, jsonEncode(choice.toJson()));
       if (region != null) await s.session.store.write(Session.pendingRegionKey, region); // 로그인 뒤 서버에 저장
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => LoginScreen(services: s)));
+      Navigator.of(context).pushReplacement(appRoute<void>(builder: (_) => LoginScreen(services: s)));
       return;
     }
     try {
@@ -174,7 +176,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               onPressed: _canNext && !_saving ? _next : null,
               child: _saving
                   ? const SizedBox(
-                      width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Sb.onAccent))
+                      width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
                   : Text(switch (_step) {
                       0 => '시작하기',
                       1 => _categories.isEmpty ? '1개 이상 골라 주세요' : '다음 (${_categories.length}개 선택)',
@@ -196,10 +198,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _ => _regionStep(),
       };
 
+  /// 화면이 낮은 기기(iPhone Duo 등)에서는 내용이 넘치지 않게 스크롤되고, 넉넉하면 예전처럼 가운데쯤에 놓인다
   Widget _welcome() {
-    return Padding(
-      padding: EdgeInsets.all(28),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    return LayoutBuilder(
+      builder: (context, box) => SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: math.max(0, box.maxHeight - 56)),
+          child: IntrinsicHeight(child: _welcomeBody()),
+        ),
+      ),
+    );
+  }
+
+  Widget _welcomeBody() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Spacer(),
         Text('🌊', style: TextStyle(fontSize: 64)),
         SizedBox(height: 20),
@@ -211,8 +224,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _Feature(icon: '⚖️', title: '비슷한 가격대 자동 매칭', body: '서로 원하는 물건일수록 위에 보여요'),
         _Feature(icon: '🔔', title: '수락하면 교환 완료', body: '요청이 오면 알림으로 바로 알려 드려요'),
         Spacer(flex: 2),
-      ]),
-    );
+      ]);
   }
 
   Widget _categoryStep() {

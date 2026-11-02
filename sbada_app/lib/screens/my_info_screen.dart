@@ -135,7 +135,7 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
             FilledButton(
               onPressed: _savingProfile ? null : _saveProfile,
               child: _savingProfile
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Sb.onAccent))
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
                   : const Text('저장하기'),
             ),
           ]),
@@ -157,7 +157,7 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
             FilledButton(
               onPressed: _savingPassword ? null : _savePassword,
               child: _savingPassword
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Sb.onAccent))
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
                   : const Text('비밀번호 바꾸기'),
             ),
             const SizedBox(height: 8),

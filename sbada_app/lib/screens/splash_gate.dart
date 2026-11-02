@@ -14,6 +14,7 @@ import '../widgets/common.dart';
 import 'home_shell.dart';
 import 'login_screen.dart';
 import 'onboarding_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 첫 화면: 어디로 보낼지 정한다.
 ///   처음 설치 → 온보딩(바꾸고 싶은 물건·관심 키워드·가격대) → 로그인/회원가입
@@ -137,7 +138,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                   : _slow
                       ? const Center(
                           child: SizedBox(
-                              width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Sb.onAccent)))
+                              width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent))))
                       : const SizedBox.shrink(),
             ),
           ),
@@ -176,7 +177,7 @@ class AppFlow {
     if (!context.mounted) return;
     final onboarded = s.session.user?.onboarded ?? false;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
+      appRoute<void>(
         builder: (_) => onboarded
             ? HomeShell(services: s)
             : OnboardingScreen(services: s, mode: OnboardingMode.afterLogin),
@@ -187,7 +188,7 @@ class AppFlow {
 
   static void goHome(BuildContext context, AppServices s) {
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(builder: (_) => HomeShell(services: s)),
+      appRoute<void>(builder: (_) => HomeShell(services: s)),
       (route) => false,
     );
   }

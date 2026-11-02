@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 
@@ -39,8 +40,12 @@ class KakaoLogin {
   static Future<String?> obtainAccessToken() async {
     final key = await _nativeAppKey();
     if (key == null) {
-      throw KakaoLoginException('카카오 앱 키가 설정되지 않았어요.\n'
-          'sbada_app/android/local.properties 에 kakao.nativeAppKey 를 넣고 앱을 다시 빌드해 주세요.');
+      // 아이폰은 ios/Flutter/Secrets.xcconfig, 안드로이드는 android/local.properties (맥에서는 카카오키_설정.command 로 둘 다)
+      throw KakaoLoginException(defaultTargetPlatform == TargetPlatform.iOS
+          ? '카카오 앱 키가 설정되지 않았어요.\n'
+              'sbada_app/ios/Flutter/Secrets.xcconfig 에 KAKAO_NATIVE_APP_KEY 를 넣고 앱을 다시 빌드해 주세요.'
+          : '카카오 앱 키가 설정되지 않았어요.\n'
+              'sbada_app/android/local.properties 에 kakao.nativeAppKey 를 넣고 앱을 다시 빌드해 주세요.');
     }
     if (!_initialized) {
       await KakaoSdk.init(nativeAppKey: key);

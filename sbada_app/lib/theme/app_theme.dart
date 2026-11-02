@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../util/apple.dart';
 
 /// 한 가지 모드(다크 또는 화이트)의 색 묶음
 class SbPalette {
@@ -170,6 +171,9 @@ ThemeData buildTheme() {
   ).copyWith(onSurface: Sb.navy, surfaceContainerHighest: Sb.bg, outline: Sb.line);
   return ThemeData(
     useMaterial3: true,
+    // iOS: 아이폰 모양(뒤로 가기 아이콘 · 스위치 · 글자 렌더링 등)과 잉크 퍼짐 없는 탭 반응
+    platform: Apple.on ? TargetPlatform.iOS : null,
+    splashFactory: Apple.on ? NoSplash.splashFactory : null,
     brightness: brightness,
     colorScheme: scheme,
     scaffoldBackgroundColor: Sb.base,

@@ -99,7 +99,8 @@ class _KakaoMapViewState extends State<KakaoMapView> {
   void initState() {
     super.initState();
     widget.controller?._state = this;
-    _host = MapHost(html: _html(), onMessage: _onMessage);
+    // interactive=false(물건 상세의 작은 지도): 웹 iframe 이 클릭 · 스크롤을 가로채지 않게 한다
+    _host = MapHost(html: _html(), onMessage: _onMessage, interactive: widget.interactive);
   }
 
   @override
@@ -118,6 +119,11 @@ class _KakaoMapViewState extends State<KakaoMapView> {
     if (!_ready) return;
     if (!identical(old.pins, widget.pins)) _js('setPins(${_pinsJson()})');
     if (old.selectedId != widget.selectedId) _js('selectPin(${widget.selectedId ?? 'null'})');
+    // 내 동네가 바뀌면 민트 점을 옮기고 지도도 새 동네로 데려간다(예전엔 점이 옛 동네에 남았음)
+    final me = widget.me;
+    if (me != null && (old.me?.lat != me.lat || old.me?.lng != me.lng)) {
+      _js('if (window.setMe) setMe(${me.lat}, ${me.lng}); panTo(${me.lat}, ${me.lng}, ${widget.level});');
+    }
   }
 
   @override
@@ -231,7 +237,10 @@ $_pinJs
     var me = $me;
     if (me) {
       var d = document.createElement('div'); d.className='me'; d.innerHTML='<i></i>';
-      new kakao.maps.CustomOverlay({position:new kakao.maps.LatLng(me.lat, me.lng), content:d, xAnchor:.5, yAnchor:.5, zIndex:0}).setMap(map);
+      var meOv = new kakao.maps.CustomOverlay({position:new kakao.maps.LatLng(me.lat, me.lng), content:d, xAnchor:.5, yAnchor:.5, zIndex:0});
+      meOv.setMap(map);
+      // 내 동네를 바꾸면(계정정보 · 동네 바꾸기) 민트 점도 새 동네로 옮긴다
+      window.setMe = function(lat, lng){ meOv.setPosition(new kakao.maps.LatLng(lat, lng)); };
     }
     post({type:'ready'});
   });
@@ -408,8 +417,10 @@ $_pinJs
     map.on('click', function(){ post({type:'mapTap'}); });
     var me = $me;
     if (me) {
-      L.marker([me.lat, me.lng], {icon:L.divIcon({html:'<div class="me"><i></i></div>', className:'', iconSize:[120,120], iconAnchor:[60,60]}),
+      var meMark = L.marker([me.lat, me.lng], {icon:L.divIcon({html:'<div class="me"><i></i></div>', className:'', iconSize:[120,120], iconAnchor:[60,60]}),
         interactive:false, keyboard:false, zIndexOffset:-1000}).addTo(map);
+      // 내 동네를 바꾸면(계정정보 · 동네 바꾸기) 민트 점도 새 동네로 옮긴다
+      window.setMe = function(lat, lng){ meMark.setLatLng([lat, lng]); };
     }
     post({type:'ready'});
   })();

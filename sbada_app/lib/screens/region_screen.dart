@@ -160,7 +160,7 @@ class _RegionScreenState extends State<RegionScreen> {
             child: FilledButton(
               onPressed: _saving ? null : _save,
               child: _saving
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Sb.onAccent))
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
                   : Text(second ? (hasSecond ? '이 동네로 바꾸기' : '이 동네 추가하기') : '이 동네로 설정하기'),
             ),
           ),

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../services/app_services.dart';
 import '../widgets/glass.dart';
+import '../widgets/pointer_shield.dart';
 import 'chat_list_screen.dart';
 import 'feed_screen.dart';
 import 'map_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'register_item_screen.dart';
+import '../widgets/expand_route.dart';
 
 /// 하단 탭 4개(떠 있는 유리 탭바): 홈 · 동네지도 · 채팅 · 계정정보
 ///  - 내 물건 · 알림 · 교환 요청은 '계정정보'와 홈의 알림 종에서 연다.
@@ -64,14 +66,14 @@ class _HomeShellState extends State<HomeShell> {
       _select(2);
       return;
     }
-    Navigator.of(context).push(MaterialPageRoute<void>(
+    Navigator.of(context).push(appRoute<void>(
       builder: (_) => NotificationsScreen(services: widget.services, initialTab: type == 'EXCHANGE_REQUESTED' ? 1 : 0),
     ));
   }
 
   Future<void> _register() async {
     final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => RegisterItemScreen(services: widget.services)),
+      appRoute(builder: (_) => RegisterItemScreen(services: widget.services)),
     );
     if (created == true) widget.services.itemsChanged.value++;
   }
@@ -104,7 +106,8 @@ class _HomeShellState extends State<HomeShell> {
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      bottomNavigationBar: GlassTabBar(tabs: _tabs, index: _index, onTap: _select),
+      // 웹에서 동네지도(iframe) 위에 있어도 탭이 눌리게 덮개를 깐다(pointer_shield.dart)
+      bottomNavigationBar: PointerShield(child: GlassTabBar(tabs: _tabs, index: _index, onTap: _select)),
     );
   }
 }

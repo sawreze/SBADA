@@ -9,13 +9,15 @@ import 'package:web/web.dart' as web;
 ///  - HTML → 앱: iframe 안에 Sbada.postMessage 가 없으므로 [_bridge] 가 만들어 parent.postMessage 로 보낸다.
 ///  - 앱 → HTML: iframe 으로 {sbadaJs: 코드} 메시지를 보내면 [_bridge] 가 실행한다(보낸 쪽이 부모 창일 때만).
 class MapHost {
-  MapHost({required String html, required void Function(String message) onMessage}) {
+  MapHost({required String html, required void Function(String message) onMessage, bool interactive = true}) {
     _frame = web.HTMLIFrameElement()
       ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
       ..srcdoc = html.replaceFirst('<head>', '<head><script>$_bridge</script>').toJS
       ..style.border = '0'
       ..style.width = '100%'
       ..style.height = '100%';
+    // 작은 지도: 클릭 · 휠이 iframe 으로 가면 Flutter 의 '누르면 전체 지도' · 페이지 스크롤이 안 된다
+    if (!interactive) _frame.style.pointerEvents = 'none';
     _listener = (web.MessageEvent e) {
       if (e.source != _frame.contentWindow) return; // 다른 지도 · 다른 창의 메시지는 무시
       final data = e.data;

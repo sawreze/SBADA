@@ -66,7 +66,7 @@ class _GpsDongButtonState extends State<GpsDongButton> {
             ),
             onPressed: _busy ? null : _find,
             icon: _busy
-                ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2.2, color: Sb.mintText))
+                ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2.2, valueColor: AlwaysStoppedAnimation<Color>(Sb.mintText)))
                 : const Icon(Icons.my_location_rounded, size: 18),
             label: Text(_busy ? '위치 찾는 중…' : '현재 위치로 찾기',
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
@@ -85,7 +85,7 @@ class _GpsDongButtonState extends State<GpsDongButton> {
           onPressed: _busy ? null : _find,
           icon: _busy
               ? const SizedBox(
-                  width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.4, color: Sb.onAccent))
+                  width: 18, height: 18, child: CircularProgressIndicator.adaptive(strokeWidth: 2.4, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
               : const Icon(Icons.my_location_rounded),
           label: Text(_busy ? '위치 찾는 중…' : '현재 위치로 동네 찾기',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
