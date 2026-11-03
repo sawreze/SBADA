@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 /// 안드로이드는 지금 모습 그대로 둔다.
 ///
 /// 웹 테스트 화면에서 iOS 모양을 미리 보려면 주소 뒤에 ?ios=1 을 붙인다(http://127.0.0.1:8097/app/?ios=1).
+/// 아이폰 사파리로 웹 화면을 열면 자동으로 iOS 모양.
 class Apple {
   Apple._();
 
@@ -12,7 +13,11 @@ class Apple {
 
   /// main() 에서 한 번 부른다
   static void init() {
-    if (kIsWeb) _webPreview = Uri.base.queryParameters['ios'] == '1';
+    // 웹: 주소에 ?ios=1 이 있거나, 아이폰 사파리로 열었으면 iOS 디자인(?ios=0 이면 끔)
+    if (kIsWeb) {
+      final q = Uri.base.queryParameters['ios'];
+      _webPreview = q == '1' || (q != '0' && defaultTargetPlatform == TargetPlatform.iOS);
+    }
   }
 
   /// 테스트에서 iOS 모양을 강제로 켤 때
