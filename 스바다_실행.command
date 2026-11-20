@@ -17,6 +17,8 @@ else
   for i in $(seq 1 60); do curl -s -o /dev/null -m 2 http://127.0.0.1:8097/api/health && break; sleep 3; done
 fi
 curl -s -m 3 http://127.0.0.1:8097/api/health; echo
+# 1-2) 결제 마이크로서비스(8098, 시연용 지갑 · 출금)
+"$ROOT/scripts/start-payment-bg.sh"
 # 2) 시뮬레이터 창 + iOS 앱
 [ -n "$SIM" ] && open "$SIM"
 osascript -e "tell application \"Terminal\" to do script \"cd '$ROOT' && scripts/run-ios.sh\""

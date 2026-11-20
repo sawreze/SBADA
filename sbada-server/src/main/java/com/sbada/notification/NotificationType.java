@@ -19,7 +19,9 @@ public enum NotificationType {
     /** 내가 올린 물건이 콘텐츠 검사(욕설 · 선정적 · 혐오)에 걸려 보류되었다(V7) */
     ITEM_HELD,
     /** 누군가 내 물건을 찜했다(V14) */
-    ITEM_LIKED;
+    ITEM_LIKED,
+    /** 결제 서비스(별도 마이크로서비스)가 보낸 지갑 이벤트: 출금 · 결제 · 추가 요금 입금 */
+    WALLET;
 
     /** 계정정보 > 알림 설정의 어느 스위치에 속하는지: like · chat · exchange (그 밖의 알림은 항상 보냄 → null) */
     public String settingKey() {

@@ -1,0 +1,24 @@
+# 스바다 MSA 를 컨테이너로 함께 띄우기: docker compose up --build
+#  - 앱은 core(8097)만 부른다. core 가 결제 요청을 payment(8098)로 넘긴다(게이트웨이).
+#  - 두 서비스가 같은 비밀 파일(JWT 키 · 내부 토큰)을 쓰도록 secrets 볼륨을 공유한다. DB 는 각자 따로.
+services:
+  core:
+    build: ./sbada-server
+    ports: ["8097:8097"]
+    environment:
+      SBADA_SERVICES_PAYMENT_URL: http://payment:8098
+      SBADA_JWT_SECRET_FILE: /secrets/.jwt-secret
+      SBADA_INTERNAL_TOKEN_FILE: /secrets/.internal-token
+    volumes: [shared-secrets:/secrets, core-data:/app/data]
+  payment:
+    build: ./sbada-payment
+    environment:
+      SBADA_CORE_URL: http://core:8097
+      SBADA_JWT_SECRET_FILE: /secrets/.jwt-secret
+      SBADA_INTERNAL_TOKEN_FILE: /secrets/.internal-token
+    volumes: [shared-secrets:/secrets, payment-data:/app/data]
+    depends_on: [core]
+volumes:
+  shared-secrets:
+  core-data:
+  payment-data:

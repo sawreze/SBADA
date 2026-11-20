@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 import '../models/chat.dart';
 import '../models/exchange.dart';
 import '../network/api_exception.dart';
+import '../repositories/wallet_repository.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/exchange_card.dart';
 import '../widgets/my_item_picker.dart';
 import '../widgets/net_image.dart';
+import '../widgets/wallet_sheets.dart';
 
 /// 채팅방. 보내기·받기는 WebSocket, 지난 메시지와 끊겼을 때의 보내기는 REST.
 ///   보낼 때: 화면에 '보내는 중' 말풍선을 먼저 그리고(clientMsgId), 서버가 같은 clientMsgId 로
@@ -244,6 +246,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       appBar: AppBar(
         title: Text(room?.partner.nickname ?? '채팅'),
         actions: [
+          // 교환 추가 요금(시연): 금액 + 수수료 5%(보내는 사람 부담)를 결제 → 상대 지갑으로
+          if (room != null)
+            IconButton(
+              key: const ValueKey('chat-pay-extra'),
+              tooltip: '추가 요금 보내기',
+              icon: const Icon(Icons.payments_outlined),
+              onPressed: () => showPayExtraSheet(context, WalletRepository(widget.services.api),
+                  toUserId: room.partner.id, toNickname: room.partner.nickname),
+            ),
           ValueListenableBuilder<bool>(
             valueListenable: widget.services.realtime.connected,
             builder: (context, on, child) => Padding(

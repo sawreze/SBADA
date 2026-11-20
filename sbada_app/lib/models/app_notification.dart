@@ -32,6 +32,7 @@ class AppNotification {
         'EXCHANGE_REJECTED' => '🙅',
         'EXCHANGE_CANCELED' => '↩️',
         'MATCH_SUGGESTED' => '✨',
+        'WALLET' => '💳',
         _ => '🔔',
       };
 

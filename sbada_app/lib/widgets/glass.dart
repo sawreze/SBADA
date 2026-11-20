@@ -351,7 +351,8 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
                           tab: widget.tabs[i],
                           selected: i == widget.index,
                           onTap: () => widget.onTap(i),
-                          onLightGlass: true,
+                          onLightGlass: !(Sb.isDark),
+                          onDarkGlass: Sb.isDark,
                         ),
                       ),
                   ]),
@@ -385,7 +386,7 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
                     child: Transform.scale(
                       scaleX: 1 + 0.02 * m,
                       scaleY: 1 + 0.06 * m,
-                      child: const _ClearGlassBar(),
+                      child: _ClearGlassBar(dark: Sb.isDark),
                     ),
                   ),
                   // ② 쉬고 있을 때의 회색 유리 알약(렌즈가 커지면 사라짐)
@@ -396,14 +397,16 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
                     height: _h - 12,
                     child: Opacity(
                       opacity: (1 - m * 1.6).clamp(0.0, 1.0),
-                      child: const DecoratedBox(
-                        key: ValueKey('tab-selected-pill'),
+                      child: DecoratedBox(
+                        key: const ValueKey('tab-selected-pill'),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(999)),
+                          borderRadius: const BorderRadius.all(Radius.circular(999)),
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Color(0x1A000000), Color(0x24000000)],
+                            colors: Sb.isDark
+                                ? const [Color(0x33FFFFFF), Color(0x1FFFFFFF)]
+                                : const [Color(0x1A000000), Color(0x24000000)],
                           ),
                         ),
                       ),
@@ -460,7 +463,10 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
 
 /// 영상 속 탭바 유리: 흐림은 약하게(뒤가 비쳐 보이게) + 반투명 흰색 + 채도 ↑ + 왼쪽 위가 밝은 빛 테 + 옅은 그림자
 class _ClearGlassBar extends StatelessWidget {
-  const _ClearGlassBar();
+  const _ClearGlassBar({this.dark = false});
+
+  /// 다크 모드: 애플 뮤직처럼 어두운 유리(검정 틴트 + 흰 아이콘)
+  final bool dark;
 
   @override
   Widget build(BuildContext context) {
@@ -481,19 +487,21 @@ class _ClearGlassBar extends StatelessWidget {
             inner: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           ),
           child: CustomPaint(
-            foregroundPainter: _RimPainter(radius: 999, dark: false),
-            child: const DecoratedBox(
+            foregroundPainter: _RimPainter(radius: 999, dark: dark),
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: br,
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   // 2026-11-03: 조금 더 투명하게(뒤가 더 비쳐 보이게)
-                  colors: [Color(0x99FFFFFF), Color(0x73FFFFFF), Color(0x85F4F5F7)],
-                  stops: [0, 0.5, 1],
+                  colors: dark
+                      ? const [Color(0x66303034), Color(0x4D1C1C1E), Color(0x66141416)]
+                      : const [Color(0x99FFFFFF), Color(0x73FFFFFF), Color(0x85F4F5F7)],
+                  stops: const [0, 0.5, 1],
                 ),
               ),
-              child: SizedBox.expand(),
+              child: const SizedBox.expand(),
             ),
           ),
         ),
@@ -564,7 +572,10 @@ class _LensRimPainter extends CustomPainter {
 }
 
 class _TabButton extends StatelessWidget {
-  const _TabButton({required this.tab, required this.selected, required this.onTap, this.onLightGlass = false});
+  const _TabButton({required this.tab, required this.selected, required this.onTap, this.onLightGlass = false, this.onDarkGlass = false});
+
+  /// iOS 어두운 유리 탭바 위: 아이콘 · 글자 흰색, 선택은 분홍빛 강조
+  final bool onDarkGlass;
 
   final GlassTab tab;
   final bool selected;
@@ -575,9 +586,11 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = onLightGlass
-        ? (selected ? const Color(0xFF111111) : const Color(0xFF2C2C2E))
-        : (selected ? Sb.navy : Sb.text2);
+    final color = onDarkGlass
+        ? (selected ? const Color(0xFFFF4D6A) : Colors.white)
+        : onLightGlass
+            ? (selected ? const Color(0xFF111111) : const Color(0xFF2C2C2E))
+            : (selected ? Sb.navy : Sb.text2);
     Widget icon = Icon(selected ? tab.selectedIcon : tab.icon, size: 24, color: color);
     if (tab.badge != null) {
       icon = ValueListenableBuilder<int>(

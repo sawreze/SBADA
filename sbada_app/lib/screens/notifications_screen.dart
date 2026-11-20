@@ -12,6 +12,7 @@ import '../widgets/common.dart';
 import '../widgets/exchange_card.dart';
 import 'chat_room_screen.dart';
 import 'item_detail_screen.dart';
+import 'wallet_screen.dart';
 import '../widgets/expand_route.dart';
 
 /// 알림함 + 받은 교환 요청(수락/거절) + 보낸 교환 요청(취소)
@@ -81,6 +82,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           .push(appRoute<void>(builder: (_) => ItemDetailScreen(services: s, itemId: n.refId!)));
     } else if (n.refType == 'EXCHANGE' && n.refId != null) {
       await _showExchange(n.refId!);
+    } else if (n.type == 'WALLET') {
+      // 결제 서비스 알림(출금되었습니다 · 추가 요금 입금) → 지갑
+      await Navigator.of(context).push(appRoute<void>(builder: (_) => WalletScreen(services: s)));
     }
     if (mounted) setState(_load);
   }

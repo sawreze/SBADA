@@ -21,6 +21,7 @@ import 'onboarding_screen.dart';
 import 'region_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/expand_route.dart';
+import 'wallet_screen.dart';
 
 /// 계정정보: 프로필 카드 + 묶음 메뉴(나의 거래 · 설정) + 로그아웃.
 /// 예전 아래쪽의 학습 선호도 · 연결 상태는 '앱 설정'으로 옮겼다(2026-10-21 사용자 요청).
@@ -172,6 +173,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: Icons.history_rounded,
                   label: '교환 내역',
                   onTap: () => _push(ExchangeHistoryScreen(services: widget.services)),
+                ),
+                // 시연용 지갑(결제 마이크로서비스): 잔액 · 출금 · 충전 · 계좌
+                SettingsRow(
+                  key: const ValueKey('wallet-entry'),
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: '지갑',
+                  subtitle: '추가 요금 받기 · 출금 (시연)',
+                  onTap: () => _push(WalletScreen(services: widget.services)),
                 ),
               ]),
               SettingsGroup(title: '설정', children: [

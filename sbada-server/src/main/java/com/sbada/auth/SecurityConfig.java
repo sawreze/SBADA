@@ -101,6 +101,8 @@ public class SecurityConfig {
                     a.requestMatchers("/", "/error", "/favicon.ico", "/test.html", "/api-test.html", "/app", "/app/**",
                                     "/api/health", "/ws", "/ws/**").permitAll()
                             .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/kakao").permitAll()
+                            // 서비스 간 내부 API(결제 서비스 → 메인 서버). 로그인 토큰 대신 X-Internal-Token 으로 InternalController 가 확인
+                            .requestMatchers("/internal/**").permitAll()
                             .requestMatchers(HttpMethod.GET, // ← 이 줄의 주소들은 GET 방식일 때만 공개
                                     "/api/items", "/api/items/*", "/api/categories",
                                     "/api/images/*", "/api/ai/status", "/api/config/map", "/api/geo/reverse").permitAll()
