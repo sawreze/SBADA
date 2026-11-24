@@ -4,6 +4,7 @@ import '../network/api_exception.dart';
 import '../services/app_services.dart';
 import '../services/kakao_login.dart';
 import '../theme/app_theme.dart';
+import '../util/id_input.dart';
 import '../widgets/common.dart';
 import 'signup_screen.dart';
 import 'splash_gate.dart';
@@ -112,8 +113,14 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: EdgeInsets.fromLTRB(24, 64, 24, 24 + keyboard),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: box.maxHeight - 88),
-                child: IntrinsicHeight(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                // 2026-11-25 사용자 요청: 시뮬레이터에서 글자를 칠 때 맨 아래에 노란 · 검정 줄무늬(넘침 표시)가 뜸.
+                // IntrinsicHeight + Spacer 는 한글 입력 후보 막대처럼 키보드 높이가 조금씩 바뀌면 높이 계산이 어긋나 넘쳤다.
+                // → 위쪽 묶음과 맨 아래 회원가입 줄을 spaceBetween 으로 벌린다(최소 높이 = 화면, 넘치면 그냥 스크롤).
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                  Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
                     Align(
                       alignment: Alignment.centerLeft,
                       // 앱 아이콘(곰 · 머그컵, assets/app_logo.png = 런처 아이콘과 같은 그림)을 둥근 사각형으로
@@ -138,6 +145,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _username,
                       textInputAction: TextInputAction.next,
                       autocorrect: false,
+                      enableSuggestions: false,
+                      // 아이디는 영문 · 숫자만: 영문 키보드로 열고, 한글로 쳐도 자판 위치대로 영문으로 바꾼다
+                      keyboardType: idKeyboardType,
+                      inputFormatters: const [IdInputFormatter()],
                       scrollPadding: const EdgeInsets.only(bottom: 220),
                       decoration: sbInput(null, hint: '아이디를 입력하세요'),
                     ),
@@ -172,7 +183,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ]),
                     const SizedBox(height: 16),
                     KakaoStartButton(loading: _kakaoLoading, onPressed: _loading ? null : _kakao),
-                    const Spacer(),
+                  ]),
+                  Column(mainAxisSize: MainAxisSize.min, children: [
                     const SizedBox(height: 24),
                     Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                       Text('처음이신가요?', style: TextStyle(fontSize: 15, color: Sb.text3)),
@@ -184,7 +196,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ]),
                   ]),
-                ),
+                ]),
               ),
             ),
           ),

@@ -8,7 +8,8 @@ echo "Xcode: $(xcode-select -p)"
 ls /Applications/Xcode.app/Contents/Developer/Applications 2>&1
 SIM="$(find /Applications/Xcode.app/Contents/Developer/Applications -maxdepth 1 -name 'Simulator.app' 2>/dev/null)"
 echo "Simulator.app: ${SIM:-없음}"
-# 1) 서버: 이미 켜져 있으면 건너뜀
+# 1) 서버: 옛 코드로 켜져 있으면 끄고(stop-stale), 새 코드로 켜져 있으면 건너뜀
+"$ROOT/scripts/stop-stale.sh"
 if curl -s -o /dev/null -m 2 http://127.0.0.1:8097/api/health; then
   echo "서버 이미 켜져 있음"
 else

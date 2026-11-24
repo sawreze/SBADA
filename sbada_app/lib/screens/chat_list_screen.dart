@@ -97,16 +97,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('채팅'),
-        actions: [
-          ValueListenableBuilder<bool>(
-            valueListenable: widget.services.realtime.connected,
-            builder: (context, on, child) => Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Pill(on ? '실시간 연결됨' : '연결 중…',
-                  color: on ? Sb.greenSoft : Sb.bg, textColor: on ? Sb.green : Sb.text3, icon: Icons.bolt),
-            ),
-          ),
-        ],
+        // 2026-11-25 사용자 요청: 오른쪽 위 '실시간 연결됨' 표시 제거(연결은 그대로 유지)
       ),
       body: Column(children: [
         _chips(),

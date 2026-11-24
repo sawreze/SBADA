@@ -65,9 +65,15 @@ void main() {
     // 끄는 동안 렌즈(확대경)가 떠 있다
     expect(find.byType(RawMagnifier), findsOneWidget);
     await g.up();
+    // 2026-11-25: 놓는 순간 렌즈가 바로 사라지고(딜레이 없음), 0.2초 안에 알약이 새 칸에 붙는다
+    await tester.pump();
+    expect(find.byType(RawMagnifier), findsNothing);
+    await tester.pump(const Duration(milliseconds: 200));
+    final settledEarly = tester.getTopLeft(find.byKey(const ValueKey('tab-selected-pill'))).dx;
     await tester.pumpAndSettle();
     expect(index, 2);
     expect(find.byType(RawMagnifier), findsNothing);
+    expect(tester.getTopLeft(find.byKey(const ValueKey('tab-selected-pill'))).dx, closeTo(settledEarly, 0.5));
     expect(tester.takeException(), isNull);
   });
 
@@ -104,6 +110,33 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('상세 2'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('iOS: ☀️/🌙 같은 작은 스위치도 탭바와 같은 유리 알약이 고른 칸으로 미끄러진다', (tester) async {
+    var index = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: StatefulBuilder(
+            builder: (context, setState) => GlassSegmented(
+              segments: const [
+                GlassSegment(Icons.light_mode_outlined, Icons.light_mode_rounded, '화이트 모드'),
+                GlassSegment(Icons.dark_mode_outlined, Icons.dark_mode_rounded, '다크 모드'),
+              ],
+              index: index,
+              onChanged: (i) => setState(() => index = i),
+            ),
+          ),
+        ),
+      ),
+    ));
+    final x0 = tester.getTopLeft(find.byKey(const ValueKey('segment-selected-pill'))).dx;
+    await tester.tap(find.byTooltip('다크 모드'));
+    await tester.pumpAndSettle();
+    expect(index, 1);
+    expect(tester.getTopLeft(find.byKey(const ValueKey('segment-selected-pill'))).dx, greaterThan(x0 + 40));
+    expect(find.byIcon(Icons.dark_mode_rounded), findsOneWidget); // 고른 칸은 채운 아이콘
     expect(tester.takeException(), isNull);
   });
 }

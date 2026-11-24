@@ -4,6 +4,7 @@ import '../network/api_exception.dart';
 import '../network/session.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
+import '../util/id_input.dart';
 import '../widgets/gps_dong_button.dart';
 import 'splash_gate.dart';
 
@@ -87,6 +88,10 @@ class _SignupScreenState extends State<SignupScreen> {
             TextFormField(
               controller: _username,
               autocorrect: false,
+              enableSuggestions: false,
+              // 2026-11-25: 아이디는 영문 키보드로, 한글로 쳐도 자판 위치대로 영문으로(util/id_input.dart)
+              keyboardType: idKeyboardType,
+              inputFormatters: const [IdInputFormatter()],
               decoration: sbInput('아이디', hint: '영문 소문자·숫자·밑줄 4~20자', errorText: e?.fieldError('username')),
               validator: (v) => RegExp(r'^[a-z0-9_]{4,20}$').hasMatch(v?.trim() ?? '')
                   ? null

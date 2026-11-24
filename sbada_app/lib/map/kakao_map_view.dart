@@ -357,6 +357,9 @@ $_css
   .leaflet-map-pane .pin .photo, .leaflet-map-pane .pin .score{z-index:1;}
   .leaflet-control-attribution{font-size:9px;background:rgba(0,0,0,.35)!important;color:#ddd;}
   .leaflet-control-attribution a{color:#cfe;}
+  /* 2026-11-25 사용자 요청: 지도를 움직이거나 확대할 때 걸리지 않게.
+     핀의 빛(drop-shadow 필터)은 매 프레임 다시 그리는 비용이 커서, 움직이는 동안만 끄고 멈추면 다시 켠다 */
+  #map.busy .pin svg{filter:none!important;}
 </style>
 </head><body>
 <div id="map"></div>
@@ -410,11 +413,27 @@ $_pinJs
     window.__mapOk = true; clearTimeout(failTimer);
     map = L.map('map', {
       zoomControl:false, attributionControl:true,
-      dragging:$i, touchZoom:$i, scrollWheelZoom:$i, doubleClickZoom:$i, boxZoom:$i, keyboard:$i
+      dragging:$i, touchZoom:$i, scrollWheelZoom:$i, doubleClickZoom:$i, boxZoom:$i, keyboard:$i,
+      // 부드럽게: 확대 단계를 정수로 '딱' 맞추지 않고(손을 뗄 때 튀는 걸림 없음), 휠 · 트랙패드도 조금씩 확대
+      zoomSnap:0, zoomDelta:1, wheelPxPerZoomLevel:110, wheelDebounceTime:10,
+      bounceAtZoomLimits:false, inertiaDeceleration:2600
     }).setView([${widget.center.lat}, ${widget.center.lng}], $zoom);
+    // 움직이는 동안만 핀 빛을 끈다(아래 CSS #map.busy)
+    var mapEl = document.getElementById('map'), idleTimer = null;
+    map.on('movestart zoomstart', function(){ clearTimeout(idleTimer); mapEl.classList.add('busy'); });
+    map.on('moveend zoomend', function(){
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(function(){ mapEl.classList.remove('busy'); }, 120);
+    });
     map.attributionControl.setPrefix(false);
+    // 바탕: 두 단계 넓은 큰 타일(1024px) — 축소할 때 아직 못 받은 칸이 빈 베이지색으로 보이지 않게 미리 깔아 둔다
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
+      tileSize:1024, zoomOffset:-2, minZoom:5, maxZoom:19, keepBuffer:2, updateWhenZooming:false, attribution:''
+    }).addTo(map);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:19, attribution:'&copy; OpenStreetMap contributors',
+      // 화면 밖 타일을 넉넉히 들고 있고(끌 때 빈칸 ↓), 확대하는 도중에는 새 타일을 받지 않는다(끝나면 한 번에)
+      keepBuffer:6, updateWhenZooming:false
     }).addTo(map);
     map.on('click', function(){ post({type:'mapTap'}); });
     var me = $me;

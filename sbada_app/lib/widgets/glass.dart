@@ -233,8 +233,9 @@ class GlassTabBar extends StatelessWidget {
 /// iOS 리퀴드 글래스 탭바(iOS 26 · 2026-11-03 사용자 영상과 같은 모양).
 ///  - 맑은 흰 유리: 뒤 화면(사진 · 목록)이 살짝 흐리게 비쳐 보이고, 가장자리에 빛 테. 다크 모드에서도 같은 흰 유리
 ///  - 가만히 있을 때: 선택 칸 뒤에 옅은 회색 유리 알약, 아이콘은 검정(선택 칸은 채운 아이콘)
-///  - 탭을 누르거나 손가락으로 끌면: 알약이 탭바보다 큰 '투명 렌즈'로 부풀어 아래 아이콘을 확대해 보여 주고(RawMagnifier),
-///    위 · 아래 가장자리에 무지개빛(빛 굴절) 테가 생긴다. 탭바도 살짝 늘어난다.
+///  - 손가락으로 끌면: 알약이 탭바보다 조금 큰 '투명 렌즈'로 부풀어 아래 아이콘을 살짝(8%) 확대해 보여 주고(RawMagnifier),
+///    위 · 아래 가장자리에 은은한 무지개빛 테가 생긴다. 탭으로 옮길 때는 더 약하게 잠깐만 부푼다.
+///  - 손을 떼면: 렌즈가 바로 사라지고 0.16초 만에 가장 가까운 칸에 붙는다(2026-11-25 사용자 요청: 딜레이 없이).
 ///  - 손가락으로 끌기: 렌즈가 손가락을 따라 다니고, 칸을 지날 때마다 '톡' 진동, 놓으면 가장 가까운 칸으로 붙으며 그 탭이 열린다.
 class _AppleTabBar extends StatefulWidget {
   const _AppleTabBar({required this.tabs, required this.index, required this.onTap});
@@ -251,12 +252,18 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
   static const _h = GlassTabBar.height;
 
   /// 칸 이동 애니메이션(0 → 1)
-  late final AnimationController _move = AnimationController(vsync: this, duration: const Duration(milliseconds: 620))
-    ..value = 1;
+  // 2026-11-25 사용자 요청: 리퀴드 글래스 효과(확대 · 렌즈 크기)를 줄이고, 손을 떼면 딜레이 없이 바로 내려앉게.
+  //  - 탭으로 옮길 때 380ms(예전 620ms), 끌다 놓았을 때는 렌즈 없이 160ms 만에 가장 가까운 칸에 붙는다.
+  static const _tapMove = Duration(milliseconds: 380);
+  static const _releaseMove = Duration(milliseconds: 160);
+  late final AnimationController _move = AnimationController(vsync: this, duration: _tapMove)..value = 1;
+
+  /// 이번 이동이 '끌다 놓기'에서 시작됐는지(그러면 렌즈를 다시 부풀리지 않고 바로 내려앉는다)
+  bool _fromRelease = false;
 
   /// 손가락으로 누르고 있는 동안 렌즈가 부푼 정도(0 → 1)
   late final AnimationController _lift = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 260), reverseDuration: const Duration(milliseconds: 420));
+      vsync: this, duration: const Duration(milliseconds: 160), reverseDuration: const Duration(milliseconds: 110));
 
   /// 이동 출발 위치(칸 단위, 소수 가능 — 끌다 놓은 자리에서 출발할 때)
   late double _fromPos = widget.index.toDouble();
@@ -270,8 +277,10 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
   void didUpdateWidget(_AppleTabBar old) {
     super.didUpdateWidget(old);
     if (old.index != widget.index) {
+      _fromRelease = _releasedAt != null;
       _fromPos = _releasedAt ?? _currentPos(old.index);
       _releasedAt = null;
+      _move.duration = _fromRelease ? _releaseMove : _tapMove;
       _move.forward(from: 0);
     }
   }
@@ -293,6 +302,7 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
 
   void _dragStart(DragStartDetails d) {
     _dragPos = _posAt(d.localPosition.dx);
+    _move.stop();
     _lift.forward();
     Apple.tick();
     setState(() {});
@@ -312,12 +322,14 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
     final v = (d?.primaryVelocity ?? 0) / _cellW;
     final target = (p + (v.abs() > 6 ? v.sign * 0.5 : 0)).round().clamp(0, widget.tabs.length - 1);
     setState(() => _dragPos = null);
-    _lift.reverse();
+    _lift.value = 0; // 놓는 순간 렌즈가 바로 사라진다(천천히 줄어드는 딜레이 없음)
     if (target != widget.index) {
       _releasedAt = p;
       widget.onTap(target);
     } else {
       _fromPos = p; // 같은 칸이면 그 자리로 돌아가기만
+      _fromRelease = true;
+      _move.duration = _releaseMove;
       _move.forward(from: 0);
     }
   }
@@ -361,7 +373,8 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
               ),
               builder: (context, buttons) {
                 final t = _move.value;
-                final moveM = _move.isAnimating ? math.sqrt((4 * t * (1 - t)).clamp(0.0, 1.0)) : 0.0;
+                // 탭으로 옮길 때만 살짝 부풀고(최대 0.6), 끌다 놓았을 때는 부풀지 않는다
+                final moveM = _move.isAnimating && !_fromRelease ? 0.6 * math.sqrt((4 * t * (1 - t)).clamp(0.0, 1.0)) : 0.0;
                 final m = math.max(moveM, Curves.easeOut.transform(_lift.value));
                 double pillL, pillW;
                 final drag = _dragPos;
@@ -373,20 +386,22 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
                   final fromL = 6 + w * _fromPos, toL = 6 + w * widget.index;
                   final right = toL >= fromL;
                   final lead = Curves.easeOutCubic.transform(t);
-                  final trail = Curves.easeOutBack.transform(const Interval(0.12, 1).transform(t));
+                  // 끌다 놓았을 때는 젤리 없이 바로 붙고, 탭일 때만 뒤쪽 끝이 살짝 따라온다
+                  final trail = _fromRelease ? lead : Curves.easeOutBack.transform(const Interval(0.08, 1).transform(t));
                   final l = fromL + (toL - fromL) * (right ? trail : lead);
                   final r = fromL + w + (toL - fromL) * (right ? lead : trail);
                   pillL = math.min(l, r);
                   pillW = math.max((r - l).abs(), w * 0.6);
                 }
                 final cx = pillL + pillW / 2;
-                final lensW = pillW + 26 * m, lensH = (_h - 12) + 34 * m;
+                // 렌즈 크기: 예전(+26 · +34)보다 작게 — 탭바 밖으로 조금만 나온다
+                final lensW = pillW + 10 * m, lensH = (_h - 12) + 14 * m;
                 return Stack(clipBehavior: Clip.none, children: [
                   // ① 맑은 흰 유리 탭바(누르는 동안 살짝 늘어남)
                   Positioned.fill(
                     child: Transform.scale(
-                      scaleX: 1 + 0.02 * m,
-                      scaleY: 1 + 0.06 * m,
+                      scaleX: 1 + 0.008 * m,
+                      scaleY: 1 + 0.02 * m,
                       child: _ClearGlassBar(dark: Sb.isDark),
                     ),
                   ),
@@ -432,7 +447,7 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
                         child: Stack(children: [
                           RawMagnifier(
                             size: Size(lensW, lensH),
-                            magnificationScale: 1 + 0.22 * m,
+                            magnificationScale: 1 + 0.08 * m, // 확대: 예전 22% → 8%
                             decoration: MagnifierDecoration(
                               shape: const StadiumBorder(),
                               shadows: [
@@ -539,8 +554,8 @@ class _LensRimPainter extends CustomPainter {
     // 무지개빛: 위 · 아래 가운데에 몰리게(양옆은 투명)
     final rainbow = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.6)
+      ..strokeWidth = 2.2
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2)
       ..shader = SweepGradient(
         colors: [
           const Color(0x00FFFFFF),
@@ -557,7 +572,7 @@ class _LensRimPainter extends CustomPainter {
         ],
         stops: const [0.02, 0.12, 0.2, 0.28, 0.4, 0.6, 0.72, 0.8, 0.88, 0.98, 1.0],
       ).createShader(rect);
-    canvas.saveLayer(rect, Paint()..color = Colors.white.withValues(alpha: m));
+    canvas.saveLayer(rect, Paint()..color = Colors.white.withValues(alpha: 0.55 * m)); // 무지개빛도 은은하게
     canvas.drawRRect(rr, rainbow);
     canvas.restore();
     // 얇은 흰 테(왼쪽 위가 더 밝게)
@@ -637,6 +652,151 @@ class _TabButton extends StatelessWidget {
               style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: color)),
         ]),
       ),
+    );
+  }
+}
+
+/// 작은 유리 스위치의 한 칸(아이콘 · 고른 뒤 아이콘 · 이름[툴팁 · 읽어 주기])
+class GlassSegment {
+  const GlassSegment(this.icon, this.selectedIcon, this.label);
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+}
+
+/// 하단 탭바와 같은 스타일의 작은 2~3칸 스위치(2026-11-25 사용자 요청: 계정정보 ☀️/🌙).
+///  - iOS: 맑은 흰 유리 바탕(_ClearGlassBar) + 고른 칸 뒤 회색 유리 알약(빛 테) + 검정 아이콘(고른 칸은 채운 아이콘)
+///  - 안드로이드: 탭바처럼 화이트는 흰 캡슐 + 회색 알약, 다크는 유리 + 흰 빛 알약
+///  - 고르면 알약이 탭바처럼 미끄러져 옮겨 가고, iOS 는 아이콘이 톡 커졌다 돌아온다
+class GlassSegmented extends StatelessWidget {
+  const GlassSegmented({
+    super.key,
+    required this.segments,
+    required this.index,
+    required this.onChanged,
+    this.cellWidth = 48,
+    this.height = 44,
+  });
+
+  final List<GlassSegment> segments;
+  final int index;
+  final ValueChanged<int> onChanged;
+
+  /// 칸 하나의 폭(48dp = 안드로이드 최소 터치 영역)
+  final double cellWidth;
+  final double height;
+
+  static const _pad = 3.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Sb.isDark;
+    final apple = Apple.on;
+    final n = segments.length;
+    const br = BorderRadius.all(Radius.circular(999));
+
+    final Widget background = apple
+        ? _ClearGlassBar(dark: dark)
+        : dark
+            ? Glass(tint: Sb.glassBar, radius: 999, child: const SizedBox.expand())
+            : const DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: br,
+                  boxShadow: [BoxShadow(color: Color(0x1A000000), blurRadius: 12, offset: Offset(0, 3))],
+                ),
+                child: SizedBox.expand(),
+              );
+    final Widget whiteCard = apple || dark
+        ? const SizedBox.shrink()
+        : DecoratedBox(
+            decoration: BoxDecoration(color: Sb.card, borderRadius: br, border: Border.all(color: Sb.line, width: 0.8)),
+            child: const SizedBox.expand(),
+          );
+
+    final Widget pill = apple
+        ? CustomPaint(
+            foregroundPainter: _RimPainter(radius: 999, dark: dark),
+            child: DecoratedBox(
+              key: const ValueKey('segment-selected-pill'),
+              decoration: BoxDecoration(
+                borderRadius: br,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: dark
+                      ? const [Color(0x40FFFFFF), Color(0x1AFFFFFF), Color(0x26FFFFFF)]
+                      : const [Color(0x66FFFFFF), Color(0x14000000), Color(0x1F000000)],
+                  stops: const [0, 0.55, 1],
+                ),
+                boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 6, offset: Offset(0, 2))],
+              ),
+            ),
+          )
+        : DecoratedBox(
+            key: const ValueKey('segment-selected-pill'),
+            decoration: BoxDecoration(
+              color: Sb.tabSelected,
+              borderRadius: br,
+              border: dark ? Border.all(color: const Color(0x1FFFFFFF), width: 0.8) : null,
+            ),
+          );
+
+    Color colorFor(bool selected) => apple
+        ? (selected ? const Color(0xFF111111) : const Color(0xFF2C2C2E))
+        : (selected ? Sb.navy : Sb.text2);
+
+    return SizedBox(
+      width: n * cellWidth + _pad * 2,
+      height: height,
+      child: Stack(children: [
+        Positioned.fill(child: background),
+        Positioned.fill(child: whiteCard),
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 280),
+          curve: apple ? Curves.easeOutBack : Curves.easeOutCubic,
+          left: _pad + cellWidth * index,
+          top: _pad,
+          width: cellWidth,
+          height: height - _pad * 2,
+          child: pill,
+        ),
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: _pad),
+            child: Row(children: [
+              for (var i = 0; i < n; i++)
+                SizedBox(
+                  width: cellWidth,
+                  child: Semantics(
+                    button: true,
+                    selected: i == index,
+                    label: segments[i].label,
+                    child: Tooltip(
+                      message: segments[i].label,
+                      child: InkResponse(
+                        radius: cellWidth / 2,
+                        onTap: () {
+                          if (i != index) Apple.tick();
+                          onChanged(i);
+                        },
+                        child: Center(
+                          child: AnimatedScale(
+                            scale: apple && i == index ? 1.08 : 1.0,
+                            duration: const Duration(milliseconds: 420),
+                            curve: Curves.elasticOut,
+                            child: Icon(i == index ? segments[i].selectedIcon : segments[i].icon,
+                                size: 21, color: colorFor(i == index)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+      ]),
     );
   }
 }

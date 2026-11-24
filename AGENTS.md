@@ -8,6 +8,8 @@
   - 비밀값 위치(모두 gitignore): `sbada-server/application-local.properties`, `sbada_app/android/local.properties`,
     `sbada_app/ios/Flutter/Secrets.xcconfig`, `*.p8`, `*/data/**`(JWT 키 `.jwt-secret`, 내부 토큰 `.internal-token`, 계좌 암호화 RSA 키 `sbada-payment/data/keys/`).
   - 커밋 전에 `git diff --cached` 에서 키 모양 문자열을 검사한다. 키 값을 출력하거나 로그에 남기지 않는다.
+- **작업이 끝나면 묻지 않고 GitHub(`sawreze/SBADA` main)에 커밋 · 푸시한다**(2026-11-25 사용자 요청). 푸시 전 비밀값 검사는 항상 한다.
+  맥 폴더(`~/dev/SBADA`, git 아님)에도 같은 파일을 넣어 둔다.
 - 결제 · 지갑은 **시연용**이다. 실제 PG · 은행 API 를 호출하는 코드를 넣지 않는다(실제 돈 이동 금지).
 - 기존 스타일(파일 상단 한국어 설명 주석, `// 2026-xx-xx 사용자 요청: …` 변경 메모)을 따른다.
 - 바꾼 기능에는 테스트를 같이 추가/수정한다. DB 를 바꾸면 Flyway 마이그레이션 `V{n}__설명.sql` 을 새로 만들고

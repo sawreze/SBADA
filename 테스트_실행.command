@@ -9,6 +9,7 @@ EMU="$ANDROID_SDK/emulator/emulator"; export PATH="$ANDROID_SDK/platform-tools:$
 SDKM="$(ls "$ANDROID_SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)"
 
 say "1) 서버"
+"$ROOT/scripts/stop-stale.sh"
 if curl -s -o /dev/null -m 2 http://127.0.0.1:8097/api/health; then say "서버 이미 켜져 있음"
 else
   term "cd '$ROOT' && scripts/run-server.sh 2>&1 | tee logs/server.log"

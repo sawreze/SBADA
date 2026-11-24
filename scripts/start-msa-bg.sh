@@ -5,6 +5,7 @@
 #  사용: scripts/start-msa-bg.sh [--wait]   (--wait: 물품 · 결제 서버가 응답할 때까지 기다림)
 source "$(dirname "$0")/_common.sh"
 WAIT="$1"
+"$ROOT/scripts/stop-stale.sh"   # 옛 코드로 돌고 있는 물품 · 결제 서버는 끄고 새로 켠다
 up9092(){ nc -z 127.0.0.1 9092 >/dev/null 2>&1; }
 
 # 1) 허브(Kafka). 없어도 서버는 켜진다 — 이벤트는 각 서버 outbox 표에 쌓였다가 Kafka 가 켜지면 보내진다

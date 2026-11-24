@@ -342,50 +342,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-/// 다크 / 화이트 모드 전환 스위치(유리 캡슐 안의 ☀️ · 🌙). 선택된 쪽이 민트로 채워진다.
+/// 다크 / 화이트 모드 전환 스위치(☀️ · 🌙).
+/// 2026-11-25 사용자 요청: 하단 탭바와 같은 스타일(맑은 유리 바탕 + 미끄러지는 회색 유리 알약 + 검정 아이콘) → GlassSegmented
 /// 크기: 높이 44dp, 칸마다 48dp 폭(안드로이드 최소 터치 영역)
 class ThemeToggle extends StatelessWidget {
   const ThemeToggle({super.key});
+
+  static const _segments = [
+    GlassSegment(Icons.light_mode_outlined, Icons.light_mode_rounded, '화이트 모드'),
+    GlassSegment(Icons.dark_mode_outlined, Icons.dark_mode_rounded, '다크 모드'),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: Sb.darkMode,
-      builder: (context, dark, child) => Glass(
-        tint: Sb.glassButton,
-        blur: 12,
-        child: Padding(
-          padding: const EdgeInsets.all(3),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            _option(Icons.light_mode_rounded, '화이트 모드', selected: !dark, onTap: () => ThemeController.setDark(false)),
-            _option(Icons.dark_mode_rounded, '다크 모드', selected: dark, onTap: () => ThemeController.setDark(true)),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _option(IconData icon, String label, {required bool selected, required VoidCallback onTap}) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      child: Tooltip(
-        message: label,
-        child: InkWell(
-          customBorder: const StadiumBorder(),
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 48,
-            height: 38,
-            decoration: ShapeDecoration(
-              shape: const StadiumBorder(),
-              color: selected ? Sb.blue : Colors.transparent,
-            ),
-            child: Icon(icon, size: 20, color: selected ? Sb.onAccent : Sb.text2),
-          ),
-        ),
+      builder: (context, dark, child) => GlassSegmented(
+        segments: _segments,
+        index: dark ? 1 : 0,
+        onChanged: (i) => ThemeController.setDark(i == 1),
       ),
     );
   }
