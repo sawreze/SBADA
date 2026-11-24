@@ -12,9 +12,9 @@ import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'home_shell.dart';
-import 'login_screen.dart';
 import 'onboarding_screen.dart';
 import '../widgets/expand_route.dart';
+import 'start_screen.dart';
 
 /// 첫 화면: 어디로 보낼지 정한다.
 ///   처음 설치 → 온보딩(바꾸고 싶은 물건·관심 키워드·가격대) → 로그인/회원가입
@@ -62,7 +62,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
       await _shown;
       if (!mounted) return;
       _replace(onboardingDone
-          ? LoginScreen(services: s)
+          ? StartScreen(services: s) // 2026-11-24: 시작 화면(소셜 로그인)
           : OnboardingScreen(services: s, mode: OnboardingMode.firstRun));
       return;
     }
@@ -72,7 +72,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
       if (e.isUnauthorized) {
         await s.logout();
         await _shown;
-        if (mounted) _replace(LoginScreen(services: s));
+        if (mounted) _replace(StartScreen(services: s));
         return;
       }
       await _shown;

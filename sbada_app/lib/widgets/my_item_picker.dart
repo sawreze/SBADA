@@ -77,7 +77,7 @@ class _MyItemPickerState extends State<_MyItemPicker> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-            child: Text('상대 물건 AI 추정가 ${formatWon(widget.target.price)} · 상대가 수락하면 교환이 완료돼요', style: sbCaption),
+            child: Text('상대 물건 가격 ${formatWon(widget.target.price)} · 상대가 수락하면 교환이 완료돼요', style: sbCaption),
           ),
           Expanded(
             child: FutureBuilder<List<Item>>(

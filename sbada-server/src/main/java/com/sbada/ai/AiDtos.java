@@ -32,7 +32,7 @@ public final class AiDtos {
                                String category, String categoryLabel, String condition, String conditionLabel,
                                int price, int priceMin, int priceMax, double confidence, String reason,
                                List<String> tags, String provider, String model, long latencyMs,
-                               int marketSamples, Integer marketMedian, double marketWeight) {
+                               int marketSamples, Integer marketMedian, double marketWeight, Integer newPrice) {
         public static AnalysisView from(AiAnalysis a) {
             // DB 에는 태그를 "자전거,헬멧" 처럼 쉼표로 이어 한 칸에 저장했으므로 목록으로 다시 나눈다
             List<String> tags = a.getTags() == null || a.getTags().isBlank() ? List.of()
@@ -43,7 +43,8 @@ public final class AiDtos {
                     a.getPrice(), a.getPriceMin(), a.getPriceMax(),
                     Math.round(a.getConfidence() * 100) / 100.0, a.getReason(), tags,
                     a.getProvider(), a.getModel(), a.getLatencyMs(),
-                    a.getMarketSamples(), a.getMarketMedian(), Math.round(a.getMarketWeight() * 100) / 100.0);
+                    a.getMarketSamples(), a.getMarketMedian(), Math.round(a.getMarketWeight() * 100) / 100.0,
+                    a.getNewPrice());
         }
     }
 

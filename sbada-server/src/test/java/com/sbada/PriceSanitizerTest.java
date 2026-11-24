@@ -93,4 +93,18 @@ class PriceSanitizerTest {
         assertEquals(10, b.samples());
         assertEquals(0.3, b.weight(), 1e-9);
     }
+
+    @Test
+    void newPriceIsKeptOnlyWhenAboveUsedPrice() {
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("category", "DIGITAL");
+        raw.put("condition", "GOOD");
+        raw.put("price_krw", 150_000);
+        raw.put("new_price_krw", 279_000);
+        assertEquals(Integer.valueOf(280_000), PriceSanitizer.sanitize(raw, PriceSanitizer.Hint.none()).newPrice());
+        raw.put("new_price_krw", 0); // 모름
+        org.junit.jupiter.api.Assertions.assertNull(PriceSanitizer.sanitize(raw, PriceSanitizer.Hint.none()).newPrice());
+        raw.put("new_price_krw", 90_000); // 중고가보다 싼 정가는 믿지 않음
+        org.junit.jupiter.api.Assertions.assertNull(PriceSanitizer.sanitize(raw, PriceSanitizer.Hint.none()).newPrice());
+    }
 }

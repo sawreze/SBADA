@@ -11,9 +11,9 @@ import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/gps_dong_button.dart';
-import 'login_screen.dart';
 import 'splash_gate.dart';
 import '../widgets/expand_route.dart';
+import 'start_screen.dart';
 
 enum OnboardingMode {
   /// 앱을 처음 설치했을 때(로그인 전) → 고른 값은 기기에 두었다가 로그인 후 서버로 보낸다
@@ -116,7 +116,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await s.session.store.write(Session.pendingPrefsKey, jsonEncode(choice.toJson()));
       if (region != null) await s.session.store.write(Session.pendingRegionKey, region); // 로그인 뒤 서버에 저장
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(appRoute<void>(builder: (_) => LoginScreen(services: s)));
+      Navigator.of(context).pushReplacement(appRoute<void>(builder: (_) => StartScreen(services: s)));
       return;
     }
     try {

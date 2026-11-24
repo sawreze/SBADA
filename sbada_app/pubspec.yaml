@@ -41,3 +41,7 @@ flutter:
     - assets/app_logo.png
     # 인터넷 안 될 때 홈 그림(offline.png 를 넣으면 사용, 없으면 😭) — widgets/offline_view.dart
     - assets/offline/
+    # 2026-11-24 디자인 반영: 시작 화면 그림 · 소셜 로그인 로고 · 은행 아이콘(사용자가 준 이미지)
+    - assets/start/
+    - assets/login/
+    - assets/banks/

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../util/apple.dart';
+import 'expand_route.dart' show PressScale;
 
 /// 리퀴드 글래스 표면: 뒤를 흐리게(blur) + 반투명 흰색 + 얇은 밝은 테두리 + 위쪽 빛 반사.
 /// 안드로이드에서도 같은 느낌이 나도록 BackdropFilter 로 직접 그린다.
@@ -397,16 +398,22 @@ class _AppleTabBarState extends State<_AppleTabBar> with TickerProviderStateMixi
                     height: _h - 12,
                     child: Opacity(
                       opacity: (1 - m * 1.6).clamp(0.0, 1.0),
-                      child: DecoratedBox(
-                        key: const ValueKey('tab-selected-pill'),
-                        decoration: BoxDecoration(
-                          borderRadius: const BorderRadius.all(Radius.circular(999)),
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: Sb.isDark
-                                ? const [Color(0x33FFFFFF), Color(0x1FFFFFFF)]
-                                : const [Color(0x1A000000), Color(0x24000000)],
+                      // 쉬고 있을 때도 선택 칸은 작은 리퀴드 글래스 캡슐(밝은 윗면 + 빛 테)
+                      child: CustomPaint(
+                        foregroundPainter: _RimPainter(radius: 999, dark: Sb.isDark),
+                        child: DecoratedBox(
+                          key: const ValueKey('tab-selected-pill'),
+                          decoration: BoxDecoration(
+                            borderRadius: const BorderRadius.all(Radius.circular(999)),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: Sb.isDark
+                                  ? const [Color(0x40FFFFFF), Color(0x1AFFFFFF), Color(0x26FFFFFF)]
+                                  : const [Color(0x66FFFFFF), Color(0x14000000), Color(0x1F000000)],
+                              stops: const [0, 0.55, 1],
+                            ),
+                            boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 6, offset: Offset(0, 2))],
                           ),
                         ),
                       ),
@@ -644,12 +651,17 @@ class GlassFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Glass(
-      tint: const Color(0xE693E1B7),
+    final button = Glass(
+      // iOS: 민트빛이 비치는 투명 리퀴드 글래스(뒤 화면이 보임), 안드로이드: 지금처럼 진한 민트
+      tint: Apple.on ? const Color(0x8C93E1B7) : const Color(0xE693E1B7),
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
-          onTap: onPressed,
+          onTap: () {
+            Apple.tick();
+            onPressed();
+          },
+          splashFactory: Apple.on ? NoSplash.splashFactory : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -661,6 +673,7 @@ class GlassFab extends StatelessWidget {
         ),
       ),
     );
+    return Apple.on ? PressScale(child: button) : button;
   }
 }
 
@@ -674,18 +687,23 @@ class GlassIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
+    final glass = Tooltip(
       message: tooltip ?? '',
       child: Glass(
         tint: Sb.glassButton,
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(
-            onTap: onPressed,
+            onTap: () {
+              Apple.tick();
+              onPressed();
+            },
+            splashFactory: Apple.on ? NoSplash.splashFactory : null,
             child: SizedBox(width: 48, height: 48, child: Icon(icon, color: Sb.navy, size: 22)),
           ),
         ),
       ),
     );
+    return Apple.on ? PressScale(child: glass) : glass;
   }
 }

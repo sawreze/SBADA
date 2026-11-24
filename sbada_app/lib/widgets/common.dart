@@ -151,14 +151,17 @@ class PriceText extends StatelessWidget {
   /// 'AI 분석 가치' 뒤에 붙일 말(예: ' · 교환완료')
   final String? after;
 
-  static const label = 'AI 분석 가치';
+  /// 2026-11-24 사용자 요청: 가격 옆에 'AI' · '가치' 같은 말을 붙이지 않는다(가격만)
+  static const label = '';
 
   @override
   Widget build(BuildContext context) {
+    final tail = '$label${after ?? ''}';
     return Text.rich(TextSpan(children: [
       TextSpan(text: formatWon(price), style: TextStyle(fontSize: size, fontWeight: FontWeight.w800, color: color ?? Sb.navy)),
-      TextSpan(
-        text: ' $label${after ?? ''}',
+      if (tail.trim().isNotEmpty)
+        TextSpan(
+        text: label.isEmpty ? tail : ' $tail',
         style: TextStyle(fontSize: (size * 0.68).clamp(11, 14).toDouble(), fontWeight: FontWeight.w500, color: Sb.text3),
       ),
     ]));

@@ -41,8 +41,9 @@ public final class PriceSanitizer {
         }
     }
 
+    /** newPrice = AI 가 추정한 같은 모델 새 제품 정가(원). 모르면 null */
     public record Result(String title, Category category, ItemCondition condition, int price, int priceMin,
-                         int priceMax, double confidence, String reason, List<String> tags) {
+                         int priceMax, double confidence, String reason, List<String> tags, Integer newPrice) {
     }
 
     public record MarketBlend(int price, int priceMin, int priceMax, int samples, Integer median,
@@ -91,8 +92,11 @@ public final class PriceSanitizer {
                 }
             }
         }
+        // 새 제품 정가: 중고가보다 낮거나 비정상이면 믿지 않는다(null → 앱은 정가 줄을 숨김)
+        int newPriceRaw = toInt(raw.get("new_price_krw"));
+        Integer newPrice = newPriceRaw >= price && newPriceRaw <= MAX_PRICE * 3 ? roundPrice(newPriceRaw) : null;
         return new Result(title, category, condition, roundPrice(price), roundPrice(range[0]),
-                roundPrice(range[1]), confidence, reason, tags);
+                roundPrice(range[1]), confidence, reason, tags, newPrice);
     }
 
     /** AI 없이 추정: 카테고리 기준가 × 상태 감가율 */
@@ -106,7 +110,7 @@ public final class PriceSanitizer {
                 why, category.label(), category.basePrice(), condition.label(), condition.factor() * 100);
         int[] range = fixRange(price, 0, 0);
         return new Result(title, category, condition, roundPrice(price), roundPrice(range[0]),
-                roundPrice(range[1]), 0.3, cut(reason, 300), List.of());
+                roundPrice(range[1]), 0.3, cut(reason, 300), List.of(), null);
     }
 
     /** ④ 시세 블렌딩. 3건 미만이면 그대로. 중앙값(평균 대신)을 쓰는 이유: 터무니없는 가격 하나에 흔들리지 않게 */
@@ -123,7 +127,7 @@ public final class PriceSanitizer {
         double ratio = (double) blended / Math.max(1, r.price());
         int[] range = fixRange(blended, (int) Math.round(r.priceMin() * ratio), (int) Math.round(r.priceMax() * ratio));
         String reason = cut(r.reason() + String.format(Locale.KOREA,
-                " (앱 내 같은 종류 %d건의 중앙값 %,d원을 %.0f%% 반영)", n, median, alpha * 100), 600);
+                "\n· 앱 안 같은 종류 %d건의 가운데값 %,d원을 %.0f%% 섞었어요", n, median, alpha * 100), 600);
         return new MarketBlend(blended, roundPrice(range[0]), roundPrice(range[1]), n, median, alpha, reason);
     }
 

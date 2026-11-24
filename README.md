@@ -73,3 +73,6 @@ cd ~/sbada/scripts            # 압축을 푼 위치
 
 에뮬레이터 안의 `10.0.2.2` 는 맥에서도 PC 의 `127.0.0.1` 을 가리키므로 앱 설정은 바꿀 필요가 없습니다.
 AI 키 파일(`application-local.properties`)은 Git 에 올라가지 않으므로 맥에서도 따로 만들어 넣습니다.
+
+## 이어서 작업하는 사람(사람 · AI)에게
+먼저 `AGENTS.md` 와 `docs/handoff/00_읽어주세요.md` 를 읽으세요.

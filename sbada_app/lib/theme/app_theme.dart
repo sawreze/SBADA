@@ -70,12 +70,12 @@ class SbPalette {
 
   static const lightMode = SbPalette(
     dark: false,
-    navy: Color(0xFF191F28),
+    navy: Color(0xFF111215),
     text2: Color(0xFF4E5968),
     text3: Color(0xFF8B95A1),
     line: Color(0xFFE5E8EB),
     bg: Color(0xFFF2F4F6),
-    base: Color(0xFFFFFFFF),
+    base: Color(0xFFFBFAF6), // 디자인 캔버스 바탕(따뜻한 흰색)
     card: Color(0xFFFFFFFF),
     chip: Color(0xFFF0F2F5),
     blueSoft: Color(0xFFE2F6EB),
@@ -108,7 +108,7 @@ class Sb {
   Sb._();
 
   /// 현재 모드. 계정정보 오른쪽 위 버튼으로 바꾸고 기기에 저장한다(theme_controller.dart).
-  static final ValueNotifier<bool> darkMode = ValueNotifier(true);
+  static final ValueNotifier<bool> darkMode = ValueNotifier(false); // 2026-11-24: 기본 화이트 모드
   static SbPalette get p => darkMode.value ? SbPalette.darkMode : SbPalette.lightMode;
   static bool get isDark => darkMode.value;
 

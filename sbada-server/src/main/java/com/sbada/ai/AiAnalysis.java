@@ -91,6 +91,10 @@ public class AiAnalysis {
     /** 앱 내 시세 보정 정보 */
     private int marketSamples;
     private Integer marketMedian;
+
+    /** AI 가 추정한 새 제품 정가(원). 모르면 null — 화면의 '정가: xxx원 (AI 추정)' */
+    @Column(name = "new_price")
+    private Integer newPrice;
     private double marketWeight;
 
     @Column(nullable = false)
@@ -116,6 +120,7 @@ public class AiAnalysis {
         this.marketSamples = blend.samples();
         this.marketMedian = blend.median();
         this.marketWeight = blend.weight();
+        this.newPrice = r.newPrice();
         this.createdAt = Instant.now();
     }
 }

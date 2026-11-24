@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/item.dart';
 import '../theme/app_theme.dart';
+import 'ai_sparkle.dart';
 
 /// 물건 상세 '거래 희망 장소' 지도 바로 위: AI 가 사진 · 글을 보고 쓴 2~3문장 요약(GET /api/items/{id}/summary).
 /// 처음 보는 물건은 Gemma 가 쓰는 동안(30초 안팎) '요약하고 있어요'를 보여 주고, 서버가 저장해 두므로 다음부터는 바로 뜬다.
@@ -42,7 +43,7 @@ class _AiSummaryCardState extends State<AiSummaryCard> {
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Icon(Icons.auto_awesome, size: 16, color: Sb.mintText),
+                const AiSparkle(size: 16),
                 const SizedBox(width: 6),
                 Text(s == null || s.byAi ? 'AI 상품 요약' : '상품 요약',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Sb.mintText)),

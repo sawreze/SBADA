@@ -108,6 +108,8 @@ void main() {
     expect(pending['priceMin'], 10000);
     expect(pending['priceMax'], 50000);
     expect(store.data[Session.pendingRegionKey], '부산 해운대구 우동'); // 로그인 뒤 PUT /api/me/region
-    expect(find.text('로그인'), findsWidgets);
+    // 2026-11-24: 온보딩이 끝나면 시작 화면(소셜 로그인 + 아이디로 로그인)
+    expect(find.byKey(const ValueKey('start-kakao')), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-id-login')), findsOneWidget);
   });
 }

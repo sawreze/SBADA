@@ -8,6 +8,7 @@ import '../util/format.dart';
 import '../widgets/common.dart';
 import '../widgets/settings_group.dart';
 import '../widgets/wallet_sheets.dart';
+import '../widgets/liquid_button.dart';
 
 /// 지갑(시연용) — 잔액 · 출금 · 충전 · 출금 계좌 · 거래 내역.
 /// 데이터는 결제 마이크로서비스(sbada-payment)에 있고, 앱은 메인 서버 게이트웨이를 거쳐 받는다.
@@ -162,31 +163,12 @@ class _WalletScreenState extends State<WalletScreen> {
         const SizedBox(height: 16),
         Row(children: [
           Expanded(
-            child: FilledButton(
-              key: const ValueKey('wallet-withdraw'),
-              onPressed: () => _withdraw(w),
-              style: FilledButton.styleFrom(
-                backgroundColor: Sb.blue,
-                foregroundColor: Sb.onAccent,
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              child: const Text('출금', style: TextStyle(fontWeight: FontWeight.w800)),
-            ),
+            child: LiquidButton(
+                key: const ValueKey('wallet-withdraw'), primary: true, height: 48, label: '출금', onPressed: () => _withdraw(w)),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: OutlinedButton(
-              key: const ValueKey('wallet-charge'),
-              onPressed: () => _charge(w),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Sb.navy,
-                minimumSize: const Size.fromHeight(48),
-                side: BorderSide(color: Sb.line),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              child: const Text('충전', style: TextStyle(fontWeight: FontWeight.w800)),
-            ),
+            child: LiquidButton(key: const ValueKey('wallet-charge'), height: 48, label: '충전', onPressed: () => _charge(w)),
           ),
         ]),
       ]),

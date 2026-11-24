@@ -21,6 +21,7 @@ import 'likes_screen.dart';
 import 'match_screen.dart';
 import 'place_map_screen.dart';
 import '../widgets/expand_route.dart';
+import '../widgets/ai_sparkle.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   const ItemDetailScreen({super.key, required this.services, required this.itemId});
@@ -418,7 +419,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Icon(Icons.auto_awesome, size: 16, color: Sb.mintText),
+          const AiSparkle(size: 16),
           const SizedBox(width: 6),
           Expanded(
             child: Text('${_providerLabel(item.aiProvider)} · ${item.categoryLabel}',
@@ -439,10 +440,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   String _providerLabel(String? p) => switch (p) {
-        'google' => 'Gemma AI 가격 분석',
-        'ollama' => 'Gemma AI 가격 분석(로컬)',
-        'seed' => 'AI 가격 분석',
-        _ => '기준가 추정(AI 미연결)',
+        // 2026-11-24 사용자 요청: 가격 표시에는 'AI' 라는 말을 쓰지 않는다
+        'google' || 'ollama' || 'seed' => '가격 분석',
+        _ => '기준가 추정',
       };
 
   Widget _actions(Item item) {

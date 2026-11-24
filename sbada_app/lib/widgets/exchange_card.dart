@@ -65,7 +65,7 @@ class ExchangeCard extends StatelessWidget {
           Expanded(child: _ItemSide(label: receiver ? '내 물건' : '상대 물건', item: e.targetItem)),
         ]),
         const SizedBox(height: 10),
-        Text('AI 가격 차이 ${formatPercent(e.priceDiffPercent)} (내놓은 물건 기준)', style: sbCaption),
+        Text('가격 차이 ${formatPercent(e.priceDiffPercent)} (내놓은 물건 기준)', style: sbCaption),
         if (e.message != null && e.message!.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text('“${e.message}”', style: sbBody),

@@ -15,7 +15,7 @@ class ThemeController {
   static Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      Sb.darkMode.value = prefs.getBool(_key) ?? true;
+      Sb.darkMode.value = prefs.getBool(_key) ?? false; // 처음 설치하면 화이트 모드
     } catch (_) {
       // 저장소를 못 읽으면 기본값(다크)
     }

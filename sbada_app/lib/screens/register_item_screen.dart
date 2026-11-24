@@ -14,6 +14,7 @@ import '../widgets/common.dart';
 import '../widgets/item_card.dart';
 import 'match_screen.dart';
 import '../widgets/expand_route.dart';
+import '../widgets/ai_sparkle.dart';
 
 /// 물건 올리기: ① 사진 찍기 → ② AI(Gemma)가 가격 분석 → ③ 확인·수정 → ④ 등록 → 비슷한 가격대 매칭
 class RegisterItemScreen extends StatefulWidget {
@@ -241,7 +242,7 @@ class _RegisterItemScreenState extends State<RegisterItemScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
         child: FilledButton.icon(
           onPressed: _photos.isEmpty ? null : () => _analyze(),
-          icon: const Icon(Icons.auto_awesome),
+          icon: const AiSparkle(size: 20),
           label: const Text('AI 가격 분석하기'),
         ),
       ),
@@ -522,10 +523,10 @@ class _RegisterItemScreenState extends State<RegisterItemScreen> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Icon(Icons.auto_awesome, color: Sb.mintText, size: 16),
+          const AiSparkle(size: 16),
           const SizedBox(width: 6),
           Expanded(
-            child: Text('${a.providerLabel} · ${a.categoryLabel}',
+            child: Text('가격 분석 · ${a.categoryLabel}',
                 style: TextStyle(color: Sb.mintText, fontSize: 13, fontWeight: FontWeight.w700)),
           ),
         ]),
@@ -536,16 +537,28 @@ class _RegisterItemScreenState extends State<RegisterItemScreen> {
             '적정 범위 ${formatWon(a.priceMin)} ~ ${formatWon(a.priceMax)} · '
             '신뢰도 $confidence(${(a.confidence * 100).round()}%)',
             style: TextStyle(color: Sb.text2, fontSize: 13)),
-        const SizedBox(height: 8),
-        Text(a.reason, style: TextStyle(color: Sb.text2, fontSize: 14, height: 1.5)),
-        if (a.marketSamples >= 3 && a.marketMedian != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            '앱 안 시세 보정: 비슷한 물건 ${a.marketSamples}개 중앙값 ${formatWon(a.marketMedian!)}을 '
-            '${(a.marketWeight * 100).round()}% 반영',
-            style: TextStyle(color: Sb.text3, fontSize: 12),
+        const SizedBox(height: 10),
+        Divider(height: 1, color: Sb.mintText.withValues(alpha: 0.25)),
+        const SizedBox(height: 10),
+        // 2026-11-24 사용자 요청: '가격 분석 결과' + 오른쪽에 '정가: xxx원 (AI 추정)', 아래에 감가 이유(1. 2. 3.)
+        Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+          Expanded(
+            child: Text('가격 분석 결과',
+                key: const ValueKey('ai-result-title'),
+                style: TextStyle(color: Sb.navy, fontSize: 14, fontWeight: FontWeight.w800)),
           ),
-        ],
+          if (a.newPrice != null)
+            Text.rich(
+              key: const ValueKey('ai-new-price'),
+              TextSpan(style: TextStyle(color: Sb.text2, fontSize: 13), children: [
+                const TextSpan(text: '정가: '),
+                TextSpan(text: formatWon(a.newPrice!), style: TextStyle(color: Sb.navy, fontWeight: FontWeight.w700)),
+              ]),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        // 감가 이유와 앱 시세 보정 줄은 서버가 reason 에 줄바꿈으로 함께 담아 보낸다
+        Text(a.reason, style: TextStyle(color: Sb.text2, fontSize: 14, height: 1.55)),
         if (a.tags.isNotEmpty) ...[
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: [

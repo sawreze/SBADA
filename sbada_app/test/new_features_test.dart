@@ -11,10 +11,10 @@ import 'package:sbada/widgets/common.dart';
 Widget _host(Widget child) => MaterialApp(theme: buildTheme(), home: Scaffold(body: child));
 
 void main() {
-  testWidgets('가격 표시: "12,000원" 뒤에 작은 글씨 "AI 분석 가치"(앞의 AI 는 없음)', (tester) async {
+  testWidgets('가격 표시: "12,000원" 만(AI · 가치 같은 말 없음)', (tester) async {
     await tester.pumpWidget(_host(const PriceText(12000)));
     final text = tester.widget<RichText>(find.byType(RichText).first).text.toPlainText();
-    expect(text, '12,000원 AI 분석 가치');
+    expect(text, '12,000원');
     expect(text.startsWith('AI'), isFalse);
   });
 

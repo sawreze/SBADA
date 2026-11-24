@@ -46,9 +46,9 @@ class FlywayMigrationTest {
     @Test
     void migrationsCreateSchemaAndDemoData() {
         Integer applied = jdbc.queryForObject(
-                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16')",
+                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17')",
                 Integer.class);
-        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(16);
+        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(17);
         // V2 시연 계정 4명 + V9 전국 판매자 135명 + V11 서울 판매자 50명 + V12 admin
         org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("select count(*) from app_users", Integer.class))
                 .isEqualTo(190);

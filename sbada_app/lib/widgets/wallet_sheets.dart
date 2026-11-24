@@ -7,6 +7,9 @@ import '../theme/app_theme.dart';
 import '../util/apple.dart';
 import '../util/format.dart';
 import 'common.dart';
+import 'bank_connect.dart';
+import 'expand_route.dart';
+import 'liquid_button.dart';
 
 /// 지갑 화면 · 채팅방에서 여는 아래쪽 시트들(계좌 추가 · 출금 · 충전 · 추가 요금 결제). 모두 시연용.
 
@@ -159,19 +162,8 @@ class _AmountField extends StatelessWidget {
 
 Widget _primary(String text, {required bool busy, required VoidCallback? onPressed, Key? key}) => SizedBox(
       width: double.infinity,
-      height: 52,
-      child: FilledButton(
-        key: key,
-        onPressed: busy ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: Sb.blue,
-          foregroundColor: Sb.onAccent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-        child: busy
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4))
-            : Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-      ),
+      // 2026-11-24 디자인 반영: 주 버튼은 민트 리퀴드 글래스
+      child: LiquidButton(key: key, primary: true, label: text, busy: busy, onPressed: onPressed),
     );
 
 // ───────────────────────── 계좌 추가 ─────────────────────────
@@ -394,6 +386,9 @@ class _PayState extends State<_Pay> {
   bool _busy = false;
   String? _error;
 
+  /// 이번 결제에서 연결한 계좌(계좌이체)
+  WalletAccount? _connected;
+
   bool get _extra => widget.toUserId != null;
 
   @override
@@ -418,6 +413,14 @@ class _PayState extends State<_Pay> {
   Future<void> _submit() async {
     final method = _method;
     if (method == null) return;
+    // 간편결제(카카오페이 · 토스페이)는 그 회사 앱으로 넘어갔다가 돌아온다(시연 화면)
+    if (method == 'KAKAOPAY' || method == 'TOSSPAY') {
+      final w = _wallet;
+      final total = _value + (w != null && _extra ? walletFee(_value, w.feePercent) : 0);
+      final ok = await Navigator.of(context).push<bool>(appRoute(
+          builder: (_) => AppSwitchScreen(appName: method == 'KAKAOPAY' ? '카카오페이' : '토스', total: total)));
+      if (ok != true || !mounted) return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -447,7 +450,26 @@ class _PayState extends State<_Pay> {
         const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
       else if (w != null) ...[
         _label('결제수단'),
-        _chips(w.methods, _method, (c) => setState(() => _method = c)),
+        _chips(w.methods.where((m) => m.code != 'TRANSFER').toList(), _method, (c) => setState(() => _method = c)),
+        const SizedBox(height: 10),
+        // 계좌 연결: 누르면 은행 고르기 시트 → 계좌 직접 연결 화면 → 연결된 계좌로 결제(계좌이체)
+        LiquidButton(
+          key: const ValueKey('pay-connect-bank'),
+          height: 50,
+          fontSize: 15,
+          leading: Icon(_method == 'TRANSFER' ? Icons.check_circle_rounded : Icons.account_balance_outlined,
+              size: 20, color: const Color(0xFF2F8A63)),
+          label: _connected == null ? '계좌 연결 · 내 은행 계좌로 결제' : '계좌이체 · ${_connected!.display}',
+          onPressed: () async {
+            final acc = await connectBankAccount(context, widget.repo);
+            if (acc != null && mounted) {
+              setState(() {
+                _connected = acc;
+                _method = 'TRANSFER';
+              });
+            }
+          },
+        ),
         const SizedBox(height: 16),
         _label(_extra ? '상대가 요구한 금액' : '충전 금액'),
         _AmountField(controller: _amount, onChanged: (v) => setState(() => _value = v)),

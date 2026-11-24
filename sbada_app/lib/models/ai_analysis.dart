@@ -22,6 +22,7 @@ class AiAnalysis {
     required this.marketSamples,
     this.marketMedian,
     required this.marketWeight,
+    this.newPrice,
   });
 
   final int analysisId;
@@ -45,6 +46,9 @@ class AiAnalysis {
   final int marketSamples;
   final int? marketMedian;
   final double marketWeight;
+
+  /// AI 가 추정한 새 제품 정가(원). 모르면 null → 화면에서 정가 줄을 숨긴다
+  final int? newPrice;
 
   bool get isAi => provider == 'google' || provider == 'ollama';
 
@@ -74,5 +78,6 @@ class AiAnalysis {
         marketSamples: optInt(j, 'marketSamples') ?? 0,
         marketMedian: optInt(j, 'marketMedian'),
         marketWeight: optDouble(j, 'marketWeight'),
+        newPrice: optInt(j, 'newPrice'),
       );
 }

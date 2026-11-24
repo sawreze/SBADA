@@ -12,7 +12,6 @@ import '../widgets/net_image.dart';
 import '../widgets/settings_group.dart';
 import 'exchange_history_screen.dart';
 import 'likes_screen.dart';
-import 'login_screen.dart';
 import 'my_info_screen.dart';
 import 'my_items_screen.dart';
 import 'notification_settings_screen.dart';
@@ -22,6 +21,7 @@ import 'region_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/expand_route.dart';
 import 'wallet_screen.dart';
+import 'start_screen.dart';
 
 /// 계정정보: 프로필 카드 + 묶음 메뉴(나의 거래 · 설정) + 로그아웃.
 /// 예전 아래쪽의 학습 선호도 · 연결 상태는 '앱 설정'으로 옮겼다(2026-10-21 사용자 요청).
@@ -113,7 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await widget.services.logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      appRoute<void>(builder: (_) => LoginScreen(services: widget.services)),
+      appRoute<void>(builder: (_) => StartScreen(services: widget.services)),
       (route) => false,
     );
   }

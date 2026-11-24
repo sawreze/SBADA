@@ -14,6 +14,7 @@ import 'chat_room_screen.dart';
 import 'item_detail_screen.dart';
 import 'wallet_screen.dart';
 import '../widgets/expand_route.dart';
+import '../widgets/ai_sparkle.dart';
 
 /// 알림함 + 받은 교환 요청(수락/거절) + 보낸 교환 요청(취소)
 class NotificationsScreen extends StatefulWidget {
@@ -263,7 +264,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         shape: BoxShape.circle,
         color: strong ? Sb.blue : (n.read ? Sb.chip : Sb.blueSoft),
       ),
-      child: Icon(icon, size: 22, color: strong ? Sb.onAccent : (n.read ? Sb.text2 : Sb.mintText)),
+      // 매칭 추천(AI)은 그라데이션 반짝이 아이콘
+      child: n.type == 'MATCH_SUGGESTED'
+          ? const Center(child: AiSparkle(size: 22))
+          : Icon(icon, size: 22, color: strong ? Sb.onAccent : (n.read ? Sb.text2 : Sb.mintText)),
     );
   }
 
