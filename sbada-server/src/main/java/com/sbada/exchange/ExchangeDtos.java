@@ -5,7 +5,11 @@ import java.util.List;
 import com.sbada.item.ItemDtos;
 import com.sbada.user.UserDtos;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -24,7 +28,23 @@ public final class ExchangeDtos {
     public record CreateRequest(
             @NotNull(message = "바꾸고 싶은 물건(targetItemId)이 필요합니다.") Long targetItemId,
             @NotNull(message = "내가 내놓을 물건(offeredItemId)이 필요합니다.") Long offeredItemId,
-            @Size(max = 200, message = "메시지는 200자 이하입니다.") String message) {
+            @Size(max = 200, message = "메시지는 200자 이하입니다.") String message,
+            // 2026-11-25 선택: 추가 금액(0 · 없음 = 없음). extraPayer 는 보내는 사람 기준 ME(내가 냄) · OTHER(상대가 냄)
+            @Min(value = 0, message = "추가 금액은 0원 이상입니다.")
+            @Max(value = 1_000_000, message = "추가 금액은 1,000,000원 이하입니다.") Long extraAmount,
+            @Pattern(regexp = "ME|OTHER", message = "extraPayer 는 ME 또는 OTHER 입니다.") String extraPayer) {
+    }
+
+    /**
+     * POST /api/exchanges/{id}/extra — 추가 금액 제안 · 요구 · 없애기(amount 0). 두 당사자 모두 가능, 결제 전까지만.
+     *  payer: 부르는 사람 기준 ME(내가 더 낼게요) · OTHER(상대가 더 내 주세요)
+     */
+    public record ExtraRequest(
+            @NotNull(message = "금액을 입력해 주세요.")
+            @Min(value = 0, message = "추가 금액은 0원 이상입니다.")
+            @Max(value = 1_000_000, message = "추가 금액은 1,000,000원 이하입니다.") Long amount,
+            @NotBlank(message = "누가 낼지 골라 주세요.")
+            @Pattern(regexp = "ME|OTHER", message = "payer 는 ME 또는 OTHER 입니다.") String payer) {
     }
 
     /**
@@ -35,7 +55,9 @@ public final class ExchangeDtos {
                                UserDtos.PublicUser requester, UserDtos.PublicUser targetOwner,
                                ItemDtos.ItemSummary offeredItem, ItemDtos.ItemSummary targetItem,
                                int priceDiffPercent, Long chatRoomId, String closeReason,
-                               String createdAt, String respondedAt, String myRole) {
+                               String createdAt, String respondedAt, String myRole,
+                               long extraAmount, Long extraPayerId, String extraDirection, String paymentStatus,
+                               boolean iReceived, boolean otherReceived) {
         public static ExchangeView from(ExchangeRequest e, Long viewerId) {
             int target = Math.max(1, e.getTargetItem().getPrice()); // 0으로 나누기 방지
             // 100.0 으로 곱해 실수 나눗셈을 한 뒤 반올림 → (int) 로 정수 변환
@@ -47,7 +69,27 @@ public final class ExchangeDtos {
                     UserDtos.PublicUser.from(e.getRequester()), UserDtos.PublicUser.from(e.getTargetOwner()),
                     ItemDtos.ItemSummary.from(e.getOfferedItem()), ItemDtos.ItemSummary.from(e.getTargetItem()),
                     diff, e.getChatRoomId(), e.getCloseReason(), e.getCreatedAt().toString(),
-                    e.getRespondedAt() == null ? null : e.getRespondedAt().toString(), role);
+                    e.getRespondedAt() == null ? null : e.getRespondedAt().toString(), role,
+                    e.getExtraAmount(), e.payerId(), direction(e, viewerId), e.getPaymentStatus(),
+                    received(e, viewerId, true), received(e, viewerId, false));
+        }
+
+        /** 양쪽 수령 확인: mine=true 면 내가, false 면 상대가 '물건 받았어요'를 눌렀는지 */
+        private static boolean received(ExchangeRequest e, Long viewerId, boolean mine) {
+            if (viewerId == null || (!e.isRequestedBy(viewerId) && !e.isReceivedBy(viewerId))) {
+                return false;
+            }
+            long other = e.isRequestedBy(viewerId) ? e.getTargetOwner().getId() : e.getRequester().getId();
+            return e.hasReceived(mine ? viewerId : other);
+        }
+
+        /** 보는 사람 기준 추가 금액 방향: I_PAY(내가 냄) · I_RECEIVE(내가 받음) · null(추가 금액 없음) */
+        private static String direction(ExchangeRequest e, Long viewerId) {
+            Long payer = e.payerId();
+            if (payer == null || viewerId == null) {
+                return null;
+            }
+            return payer.equals(viewerId) ? "I_PAY" : "I_RECEIVE";
         }
     }
 

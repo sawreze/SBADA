@@ -3,6 +3,7 @@ package com.sbada.payment.wallet;
 import java.util.List;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -51,8 +52,7 @@ public final class WalletDtos {
                          String method, String methodLabel, String memo, String createdAt) {
         static TxView from(WalletTransaction t) {
             return new TxView(t.getId(), t.getType(), TxType.labelOf(t.getType()), t.getAmount(), t.getFee(),
-                    t.getBalanceAfter(), t.getMethod(),
-                    t.getMethod() == null ? null : Catalog.METHODS.getOrDefault(t.getMethod(), t.getMethod()),
+                    t.getBalanceAfter(), t.getMethod(), Catalog.methodLabel(t.getMethod()),
                     t.getMemo(), t.getCreatedAt().toString());
         }
     }
@@ -69,5 +69,62 @@ public final class WalletDtos {
 
     /** GET /api/payments/quote?amount= — 추가 요금 결제 전에 수수료 · 총액 미리보기 */
     public record Quote(long amount, int feePercent, long fee, long total) {
+    }
+
+    // ───────────── 2026-11-25 안전결제(에스크로) · 1원 인증 · 샌드박스 ─────────────
+
+    /**
+     * POST /api/payments/escrow — 교환 추가 금액을 안전결제로 낸다(보관 → 교환 완료 때 정산).
+     * toUserId 는 메인 서버 확인을 끈 테스트에서만 쓴다(평소에는 교환 정보에서 받는 사람을 정한다).
+     */
+    public record EscrowRequest(
+            @NotNull(message = "교환 번호가 필요합니다.") Long exchangeId,
+            @NotNull(message = "금액을 입력해 주세요.") Long amount,
+            @NotBlank(message = "결제수단을 골라 주세요.") String method,
+            Long toUserId,
+            @Size(max = 60, message = "메모는 60자 이하입니다.") String memo) {
+    }
+
+    /** role: 보는 사람 입장 PAYER(낸 사람) · PAYEE(받을 사람), 내부 호출이면 null */
+    public record EscrowView(long id, long exchangeId, String role, long amount, long fee, long total,
+                             String method, String methodLabel, String status, String statusLabel,
+                             String releaseAfter, String settledAt, String createdAt) {
+        static EscrowView from(EscrowPayment e, Long viewerId) {
+            String role = viewerId == null ? null
+                    : viewerId.equals(e.getPayerId()) ? "PAYER" : viewerId.equals(e.getPayeeId()) ? "PAYEE" : null;
+            String label = switch (e.getStatus()) {
+                case EscrowPayment.HELD -> "보관 중";
+                case EscrowPayment.RELEASED -> "정산 완료";
+                case EscrowPayment.REFUNDED -> "환불 완료";
+                default -> e.getStatus();
+            };
+            return new EscrowView(e.getId(), e.getExchangeId(), role, e.getAmount(), e.getFee(), e.total(),
+                    e.getMethod(), Catalog.methodLabel(e.getMethod()), e.getStatus(), label,
+                    e.getReleaseAfter().toString(), e.getSettledAt() == null ? null : e.getSettledAt().toString(),
+                    e.getCreatedAt().toString());
+        }
+    }
+
+    /** 안전결제 결과: 알림 문구 + 내 지갑 잔액 + 보관 정보 + 원장 한 줄 */
+    public record EscrowResult(String message, long balance, EscrowView escrow, TxView transaction) {
+    }
+
+    /** POST /internal/escrow/release · refund (메인 서버만 부름) */
+    public record EscrowCommand(@NotNull(message = "교환 번호가 필요합니다.") Long exchangeId,
+                                @Size(max = 60) String reason) {
+    }
+
+    /**
+     * POST /api/wallet/accounts/verify 응답 — 1원 인증 시작.
+     * demoMemo: 샌드박스에서만 채워진다(실제 입금이 없으니 입금자명을 대신 보여 줌). 알림으로도 같은 내용이 간다.
+     */
+    public record VerifyStart(String verificationId, String bankName, String accountMasked, String holder,
+                              String expiresAt, int maxAttempts, String demoMemo, String guide) {
+    }
+
+    /** POST /api/wallet/accounts/verify/{id}/confirm — 입금자명의 숫자 4자리 */
+    public record VerifyConfirm(
+            @NotBlank(message = "인증 숫자를 입력해 주세요.")
+            @Pattern(regexp = "\\s*\\d{4}\\s*", message = "숫자 4자리를 입력해 주세요.") String code) {
     }
 }

@@ -25,6 +25,12 @@ import jakarta.validation.Valid;
  *  POST /api/exchanges/{id}/reject   거절 — 받은 사람만
  *  POST /api/exchanges/{id}/cancel   취소 — 보낸 사람만
  *
+ *  2026-11-25 금융 백엔드(추가 금액 + 안전결제)
+ *  POST /api/exchanges/{id}/extra         추가 금액 제안 · 요구 · 없애기 {"amount":30000,"payer":"ME|OTHER"}
+ *  POST /api/exchanges/{id}/complete      '물건 받았어요'(양쪽 수령 확인) → 둘 다 누르면 받는 사람 지갑으로 정산
+ *  POST /api/exchanges/{id}/refund-extra  받는 사람이 결제된 추가 금액을 돌려줌 → 환불
+ *  (결제 자체는 앱 → /api/payments/escrow {"exchangeId","amount","method"} → 게이트웨이 → 결제 서비스)
+ *
  * [프로그래밍 설명 — 상태를 바꾸는 '행동' API]
  *  - accept/reject/cancel 은 '자원을 만드는 것'이 아니라 상태 전이(REQUESTED → ACCEPTED 등)라서
  *    /{id}/accept 처럼 동사를 붙인 POST 로 만들었다(REST 에서 흔히 쓰는 '액션 엔드포인트').
@@ -84,7 +90,8 @@ public class ExchangeController {
     public ResponseEntity<ExchangeDtos.ExchangeView> create(@Valid @RequestBody ExchangeDtos.CreateRequest input,
                                                             Authentication auth) {
         ExchangeDtos.ExchangeView view = service.create((Long) auth.getPrincipal(), input.targetItemId(),
-                input.offeredItemId(), input.message());
+                input.offeredItemId(), input.message(),
+                input.extraAmount() == null ? 0 : input.extraAmount(), input.extraPayer());
         return ResponseEntity.created(URI.create("/api/exchanges/" + view.id())).body(view);
     }
 
@@ -149,5 +156,39 @@ public class ExchangeController {
     @PostMapping("/{id}/cancel")
     public ExchangeDtos.ExchangeView cancel(@PathVariable long id, Authentication auth) {
         return service.cancel(id, (Long) auth.getPrincipal());
+    }
+
+    /**
+     * ■ 추가 금액 정하기   POST /api/exchanges/{id}/extra   {"amount": 30000, "payer": "ME"}
+     *   payer: 부르는 사람 기준 ME(내가 더 낼게요) · OTHER(상대가 더 내 주세요). amount 0 이면 조건을 없앤다.
+     *   두 당사자 모두 가능, 결제 전까지만(결제 후 409 ALREADY_PAID). 상대에게 알림 + 채팅에 한 줄.
+     * 오류: 400 INVALID_EXTRA_AMOUNT(1,000 ~ 1,000,000원) · 403 NOT_PARTICIPANT · 409 INVALID_STATUS / ALREADY_PAID
+     */
+    @PostMapping("/{id}/extra")
+    public ExchangeDtos.ExchangeView extra(@PathVariable long id, @Valid @RequestBody ExchangeDtos.ExtraRequest input,
+                                           Authentication auth) {
+        return service.setExtra(id, (Long) auth.getPrincipal(), input.amount(), input.payer());
+    }
+
+    /**
+     * ■ 물건 받았어요(양쪽 수령 확인)   POST /api/exchanges/{id}/complete   (본문 없음) — 두 당사자 각각
+     *   성사(ACCEPTED)된 교환에서 물건을 받은 뒤 누른다. 한 사람만 누르면 iReceived=true 로 기다리고,
+     *   둘 다 누르면 결제 서비스가 받는 사람 지갑으로 정산(paymentStatus RELEASED).
+     *   아무도 안 눌러도 성사 뒤 72시간이 지나면 결제 서비스가 자동 정산한다.
+     * 오류: 403 NOT_PARTICIPANT · 409 NOT_ACCEPTED / NOT_PAID / NO_EXTRA_TERMS · 503 PAYMENT_SERVICE_DOWN
+     */
+    @PostMapping("/{id}/complete")
+    public ExchangeDtos.ExchangeView complete(@PathVariable long id, Authentication auth) {
+        return service.confirmDeal(id, (Long) auth.getPrincipal());
+    }
+
+    /**
+     * ■ 추가 금액 돌려주기   POST /api/exchanges/{id}/refund-extra   (본문 없음) — 추가 금액을 받을 사람만
+     *   결제되어 보관 중인 돈을 낸 사람에게 환불(paymentStatus REFUNDED).
+     * 오류: 403 NOT_PAYEE · 409 NOT_REFUNDABLE / ALREADY_RELEASED · 503 PAYMENT_SERVICE_DOWN
+     */
+    @PostMapping("/{id}/refund-extra")
+    public ExchangeDtos.ExchangeView refundExtra(@PathVariable long id, Authentication auth) {
+        return service.refundExtra(id, (Long) auth.getPrincipal());
     }
 }

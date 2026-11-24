@@ -6,7 +6,12 @@ public enum TxType {
     CHARGE("충전"),
     WITHDRAW("출금"),
     PAY("추가 요금 결제"),
-    RECEIVE("추가 요금 받음");
+    RECEIVE("추가 요금 받음"),
+    // 2026-11-25 안전결제(에스크로) · 샌드박스
+    ESCROW_HOLD("안전결제 결제"),
+    ESCROW_RELEASE("안전결제 정산"),
+    ESCROW_REFUND("안전결제 환불"),
+    SANDBOX_RESET("테스트 잔액 초기화");
 
     private final String label;
 

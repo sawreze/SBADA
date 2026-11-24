@@ -31,6 +31,17 @@ public final class Catalog {
         METHODS.put("TRANSFER", "계좌이체(카카오뱅크·토스뱅크 등)");
     }
 
+    /** 쓰바다 지갑 잔액으로 결제(안전결제 · 추가 요금에서만). 충전 수단 목록(METHODS)에는 넣지 않는다 */
+    public static final String WALLET = "WALLET";
+
+    /** 결제수단 코드 → 화면 이름(WALLET 포함). 모르는 코드는 그대로 */
+    public static String methodLabel(String code) {
+        if (code == null) {
+            return null;
+        }
+        return WALLET.equals(code) ? "쓰바다 지갑" : METHODS.getOrDefault(code, code);
+    }
+
     public record Option(String code, String label) {
     }
 

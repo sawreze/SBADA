@@ -88,6 +88,26 @@ public class ExchangeRequest {
     /** 수락·거절·취소된 시각(대기 중이면 null) */
     private Instant respondedAt;
 
+    // ── 2026-11-25 금융 백엔드: 교환 추가 금액(V18) ──
+    /** 추가 금액(원). 0 이면 없음 */
+    @Column(name = "extra_amount", nullable = false)
+    private long extraAmount;
+
+    /** 누가 내는지: REQUESTER · OWNER (추가 금액이 없으면 null). DB 에는 문자열로 저장 */
+    @Column(name = "extra_payer", length = 20)
+    private String extraPayer;
+
+    /** 안전결제 상태(PaymentStatus 이름). 돈은 결제 서비스가 갖고, 여기는 화면에 보여 줄 상태만 */
+    @Column(name = "payment_status", nullable = false, length = 20)
+    private String paymentStatus = PaymentStatus.NONE.name();
+
+    /** 양쪽 수령 확인: 요청자 · 물건 주인이 각각 '물건 받았어요'를 누른 시각(둘 다 있어야 정산) */
+    @Column(name = "requester_received_at")
+    private Instant requesterReceivedAt;
+
+    @Column(name = "owner_received_at")
+    private Instant ownerReceivedAt;
+
     public ExchangeRequest(AppUser requester, Item offeredItem, Item targetItem, String message) {
         this.requester = requester;
         this.targetOwner = targetItem.getOwner(); // 받는 사람은 원하는 물건의 주인으로 자동 결정
@@ -122,6 +142,98 @@ public class ExchangeRequest {
     /** 이 사용자가 받은 사람인가 */
     public boolean isReceivedBy(long userId) {
         return targetOwner.getId() == userId;
+    }
+
+    // ───────────── 추가 금액 · 안전결제 상태 ─────────────
+
+    public static final String PAYER_REQUESTER = "REQUESTER";
+    public static final String PAYER_OWNER = "OWNER";
+
+    /**
+     * 추가 금액 조건 정하기(0 이면 없앰). 대기 · 성사 상태에서만, 그리고 아직 결제 전일 때만 바꿀 수 있다.
+     * payer: REQUESTER(요청 보낸 사람이 냄) · OWNER(물건 주인이 냄)
+     */
+    public void setExtraTerms(long amount, String payer) {
+        if (status != ExchangeStatus.REQUESTED && status != ExchangeStatus.ACCEPTED) {
+            throw ApiException.conflict("INVALID_STATUS", "이미 끝난 교환이에요(현재 상태: " + status.name() + ").");
+        }
+        if (isPaymentLocked()) {
+            throw ApiException.conflict("ALREADY_PAID", "이미 결제된 추가 금액은 바꿀 수 없어요.");
+        }
+        if (amount <= 0) {
+            this.extraAmount = 0;
+            this.extraPayer = null;
+        } else {
+            this.extraAmount = amount;
+            this.extraPayer = payer;
+        }
+        this.paymentStatus = PaymentStatus.NONE.name(); // 환불된 뒤 조건을 새로 정하면 다시 '안 냄'
+    }
+
+    public boolean hasExtra() {
+        return extraPayer != null && extraAmount > 0;
+    }
+
+    /** 추가 금액을 낼 사람 번호(없으면 null) */
+    public Long payerId() {
+        if (!hasExtra()) {
+            return null;
+        }
+        return PAYER_REQUESTER.equals(extraPayer) ? requester.getId() : targetOwner.getId();
+    }
+
+    /** 추가 금액을 받을 사람 번호(없으면 null) */
+    public Long payeeId() {
+        if (!hasExtra()) {
+            return null;
+        }
+        return PAYER_REQUESTER.equals(extraPayer) ? targetOwner.getId() : requester.getId();
+    }
+
+    public PaymentStatus payment() {
+        return PaymentStatus.valueOf(paymentStatus);
+    }
+
+    /** 결제가 진행 중이거나 끝나서 조건을 바꿀 수 없는 상태 */
+    public boolean isPaymentLocked() {
+        PaymentStatus p = payment();
+        return p == PaymentStatus.PAID_HELD || p == PaymentStatus.RELEASED || p == PaymentStatus.REFUND_PENDING;
+    }
+
+    /** 결제 상태 바꾸기. 실제로 바뀌었으면 true(같은 이벤트가 두 번 와도 한 번만 반영) */
+    public boolean changePayment(PaymentStatus next) {
+        if (payment() == next) {
+            return false;
+        }
+        this.paymentStatus = next.name();
+        return true;
+    }
+
+    /**
+     * 물건 받음 확인(양쪽 수령 확인). 이번에 새로 확인했으면 true, 이미 확인했으면 false.
+     * 두 사람이 모두 확인해야 안전결제가 받는 사람에게 정산된다.
+     */
+    public boolean confirmReceived(long userId) {
+        if (isRequestedBy(userId)) {
+            if (requesterReceivedAt != null) {
+                return false;
+            }
+            requesterReceivedAt = Instant.now();
+            return true;
+        }
+        if (ownerReceivedAt != null) {
+            return false;
+        }
+        ownerReceivedAt = Instant.now();
+        return true;
+    }
+
+    public boolean hasReceived(long userId) {
+        return isRequestedBy(userId) ? requesterReceivedAt != null : ownerReceivedAt != null;
+    }
+
+    public boolean bothReceived() {
+        return requesterReceivedAt != null && ownerReceivedAt != null;
     }
 
     /** 상태 전이의 단일 관문: REQUESTED 가 아니면 409, 맞으면 다음 상태·이유·시각을 기록 */

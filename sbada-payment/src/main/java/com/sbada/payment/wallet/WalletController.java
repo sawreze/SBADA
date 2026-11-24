@@ -28,20 +28,32 @@ import jakarta.validation.Valid;
  *  POST   /api/payments/extra            교환 추가 요금 결제 → 받는 사람 지갑에 입금
  *  GET    /api/payment/health            상태 확인(로그인 불필요)
  *
+ *  2026-11-25 금융 백엔드
+ *  POST   /api/wallet/accounts/verify               1원 인증 시작(계좌로 1원 · 입금자명 숫자 4자리)
+ *  POST   /api/wallet/accounts/verify/{id}/confirm  숫자 4자리 확인 → 계좌 등록(201)
+ *  POST   /api/payments/escrow                      교환 추가 금액 안전결제(보관)
+ *  GET    /api/payments/escrow?exchangeId=          그 교환의 안전결제 상태(당사자만)
+ *  POST   /api/wallet/sandbox/reset                 [테스트] 내 지갑 잔액을 시연 기본값으로
+ *  (정산 · 환불은 메인 서버만 부르는 내부 API: EscrowInternalController)
+ *
  * 앱은 메인 서버(8097)로만 요청한다. 메인 서버의 게이트웨이가 이 주소들을 결제 서비스(8098)로 넘긴다.
  */
 @RestController
 public class WalletController {
 
     private final WalletService service;
+    private final EscrowService escrow;
 
-    public WalletController(WalletService service) {
+    public WalletController(WalletService service, EscrowService escrow) {
         this.service = service;
+        this.escrow = escrow;
     }
 
     @GetMapping("/api/payment/health")
     public Map<String, Object> health() {
-        return Map.of("status", "UP", "service", "sbada-payment", "demo", true);
+        return Map.of("status", "UP", "service", "sbada-payment", "demo", true,
+                "mode", service.isSandbox() ? "SANDBOX" : "DEMO", "realMoney", false,
+                "label", "시연 모드 · 가상 거래"); // 앱 결제 화면 상단 배지에 그대로 쓴다
     }
 
     @GetMapping("/api/wallet")
@@ -53,6 +65,33 @@ public class WalletController {
     public ResponseEntity<WalletDtos.AccountView> addAccount(@CurrentUser long userId,
                                                              @Valid @RequestBody WalletDtos.AddAccountRequest in) {
         return ResponseEntity.status(201).body(service.addAccount(userId, in));
+    }
+
+    @PostMapping("/api/wallet/accounts/verify")
+    public WalletDtos.VerifyStart startVerification(@CurrentUser long userId,
+                                                    @Valid @RequestBody WalletDtos.AddAccountRequest in) {
+        return service.startVerification(userId, in);
+    }
+
+    @PostMapping("/api/wallet/accounts/verify/{id}/confirm")
+    public ResponseEntity<WalletDtos.AccountView> confirmVerification(@CurrentUser long userId, @PathVariable String id,
+                                                                      @Valid @RequestBody WalletDtos.VerifyConfirm in) {
+        return ResponseEntity.status(201).body(service.confirmVerification(userId, id, in.code()));
+    }
+
+    @PostMapping("/api/wallet/sandbox/reset")
+    public WalletDtos.TxResult sandboxReset(@CurrentUser long userId) {
+        return service.sandboxReset(userId);
+    }
+
+    @PostMapping("/api/payments/escrow")
+    public WalletDtos.EscrowResult hold(@CurrentUser long userId, @Valid @RequestBody WalletDtos.EscrowRequest in) {
+        return escrow.hold(userId, in);
+    }
+
+    @GetMapping("/api/payments/escrow")
+    public WalletDtos.EscrowView escrow(@CurrentUser long userId, @RequestParam long exchangeId) {
+        return escrow.view(userId, exchangeId);
     }
 
     @DeleteMapping("/api/wallet/accounts/{id}")
