@@ -11,7 +11,7 @@ import 'login_screen.dart';
 import 'splash_gate.dart';
 
 /// 시작 화면(디자인 캔버스 'Start', 2026-11-24):
-///   sbada 로고 글자 → “쓰던 물건을 바꾸다” → 교환 일러스트 → Google · Apple · 카카오 · 네이버로 시작 → 먼저 둘러보기
+///   sbada 로고 글자 → “쓰던 물건으로 세상을 바꾸다”(2026-11-25 문구 변경) → 교환 일러스트 → Google · Apple · 카카오 · 네이버로 시작 → 먼저 둘러보기
 /// 실제로 되는 소셜 로그인은 카카오. Google · Apple · 네이버는 서버 · SDK 를 붙이기 전까지 안내만 띄운다.
 class StartScreen extends StatefulWidget {
   const StartScreen({super.key, required this.services});
@@ -77,7 +77,7 @@ class _StartScreenState extends State<StartScreen> {
                     style: const TextStyle(fontSize: 54, fontWeight: FontWeight.w800, letterSpacing: -1.5, height: 1),
                   ),
                   const SizedBox(height: 14),
-                  const Text('“쓰던 물건을 바꾸다”',
+                  const Text('“쓰던 물건으로 세상을 바꾸다”',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
