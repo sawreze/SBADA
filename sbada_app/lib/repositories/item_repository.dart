@@ -4,32 +4,67 @@ import '../models/ai_analysis.dart';
 import '../models/item.dart';
 import '../models/recommendation.dart';
 import '../network/api_client.dart';
+import '../network/api_exception.dart';
 
 class ItemRepository {
   ItemRepository(this.api);
 
   final ApiClient api;
 
+  // ───── 2026-11-25 사용자 요청: 물품 목록은 GraphQL 로 ─────
+  // POST /graphql (메인 서버 게이트웨이 → 물품 서버). 목록 화면에 필요한 칸만 골라 받는다(설명 · AI 근거 등은 상세에서).
+  // 모양은 REST ItemView 와 같아서 Item.fromJson 을 그대로 쓴다. 등록 · 수정 · 삭제 · 찜하기는 REST 그대로.
+  static const _listFields = '''
+    id title category categoryLabel categoryEmoji condition conditionLabel status
+    price priceMin priceMax aiConfidence wishCategories wishCategoryLabels imageUrls
+    owner { id nickname region } viewCount requestCount likeCount createdAt moderationReason likedByMe
+  ''';
+
+  /// GraphQL 한 번 부르기. 오류가 있으면 REST 와 같은 ApiException(코드 · 한국어 메시지)으로 바꾼다
+  Future<Map<String, dynamic>> _gql(String query, [Map<String, dynamic> variables = const {}]) async {
+    final res = await api.post('/graphql', body: {'query': query, 'variables': variables}) as Map<String, dynamic>;
+    final errors = res['errors'];
+    if (errors is List && errors.isNotEmpty) {
+      final e = errors.first as Map<String, dynamic>;
+      final ext = (e['extensions'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
+      final code = (ext['code'] ?? ext['classification'] ?? 'GRAPHQL_ERROR').toString();
+      final status = switch (ext['classification']) {
+        'UNAUTHORIZED' => 401,
+        'FORBIDDEN' => 403,
+        'NOT_FOUND' => 404,
+        _ => 400,
+      };
+      throw ApiException(status, code, (e['message'] ?? '요청을 처리하지 못했어요.').toString());
+    }
+    return (res['data'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
+  }
+
+  List<Item> _items(Object? raw) =>
+      (raw as List? ?? const []).map((e) => Item.fromJson(e as Map<String, dynamic>)).toList();
+
   /// 나를 위한 추천(선호도·가격적합도·신선도·인기도). area: 홈 왼쪽 위 범위(util/area_scope.dart, null = 전국)
   Future<FeedResult> feed({int limit = 30, String? area}) async => FeedResult.fromJson(
       await api.get('/api/feed', query: {'limit': '$limit', 'area': ?area}) as Map<String, dynamic>);
 
-  /// 범위 안 물건 수 GET /api/items/count (area null = 전국)
+  /// 범위 안 물건 수(GraphQL itemCount, area null = 전국)
   Future<int> count({String? area}) async {
-    final json = await api.get('/api/items/count', query: {'area': ?area}, auth: false) as Map<String, dynamic>;
-    return (json['count'] as num).toInt();
+    final data = await _gql(r'query($area: String) { itemCount(area: $area) }', {'area': area});
+    return (data['itemCount'] as num).toInt();
   }
 
-  /// 최신 목록(공개). 목록 응답은 {"items": [...]} 이므로 items 를 꺼낸다(10장 3.1)
+  /// 최신 목록(공개, GraphQL items). 로그인했으면 likedByMe 까지 한 번에 온다
   /// q: 물건 이름 · 동네(주소) · 초성 검색(서버 HangulSearch). limit: 검색창 추천 목록처럼 몇 개만 필요할 때
   Future<List<Item>> latest({String? category, String? q, int? limit, String? area}) async {
-    final json = await api.get('/api/items', query: {
-      'category': ?category,
-      'area': ?area,
-      if (q != null && q.isNotEmpty) 'q': q,
-      if (limit != null) 'limit': '$limit',
-    }) as Map<String, dynamic>;
-    return (json['items'] as List).map((e) => Item.fromJson(e as Map<String, dynamic>)).toList();
+    final data = await _gql(
+        'query(\$category: String, \$q: String, \$area: String, \$limit: Int) '
+        '{ items(category: \$category, q: \$q, area: \$area, limit: \$limit) { $_listFields } }',
+        {
+          'category': category,
+          'q': (q != null && q.isNotEmpty) ? q : null,
+          'area': area,
+          'limit': limit ?? 50,
+        });
+    return _items(data['items']);
   }
 
   /// 찜하기 POST /api/items/{id}/like · 해제 DELETE — 응답 {"itemId":7,"liked":true}
@@ -39,18 +74,13 @@ class ItemRepository {
     return json['liked'] == true;
   }
 
-  /// 내 관심목록(최근 찜한 순) GET /api/me/likes
-  Future<List<Item>> likes() async {
-    final json = await api.get('/api/me/likes') as Map<String, dynamic>;
-    return (json['items'] as List).map((e) => Item.fromJson(e as Map<String, dynamic>)).toList();
-  }
+  /// 내 관심목록(최근 찜한 순, GraphQL myLikes)
+  Future<List<Item>> likes() async => _items((await _gql('{ myLikes { $_listFields } }'))['myLikes']);
 
   Future<Item> detail(int id) async => Item.fromJson(await api.get('/api/items/$id') as Map<String, dynamic>);
 
-  Future<List<Item>> mine() async {
-    final json = await api.get('/api/me/items') as Map<String, dynamic>;
-    return (json['items'] as List).map((e) => Item.fromJson(e as Map<String, dynamic>)).toList();
-  }
+  /// 내 물건(GraphQL myItems, 내린 물건 제외)
+  Future<List<Item>> mine() async => _items((await _gql('{ myItems { $_listFields } }'))['myItems']);
 
   /// 동네지도 핀의 매치도: 보이는 물건들만 홈 추천과 같은 식으로 점수(GET /api/feed/scores?ids=). {물건 번호: 점수}
   Future<Map<int, int>> scores(List<int> ids) async {

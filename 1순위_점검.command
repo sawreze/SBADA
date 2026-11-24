@@ -7,16 +7,15 @@ L="$ROOT/logs/priority1.log"; B=http://127.0.0.1:8097
 {
 echo "[$(date +%H:%M:%S)] 시작"
 # 1) 예전 서버 · 결제 서비스 끄기
-for p in 8097 8098; do P="$(lsof -ti tcp:$p -sTCP:LISTEN 2>/dev/null)"; [ -n "$P" ] && { echo "포트 $p 종료(PID $P)"; kill $P; }; done
+for p in 8097 8098 8099; do P="$(lsof -ti tcp:$p -sTCP:LISTEN 2>/dev/null)"; [ -n "$P" ] && { echo "포트 $p 종료(PID $P)"; kill $P; }; done
 sleep 3
 # 2) 새 코드로 서버 켜기
 ( cd "$ROOT/sbada-server" && chmod +x gradlew && nohup ./gradlew bootRun --console=plain --args="--spring.profiles.active=dev" > "$ROOT/logs/server.log" 2>&1 & )
 for i in $(seq 1 60); do curl -s -o /dev/null -m 2 $B/api/health && break; sleep 3; done
 curl -s -m 3 $B/api/health >/dev/null && echo "서버 OK" || { echo "서버가 안 켜짐 → logs/server.log"; tail -30 "$ROOT/logs/server.log"; exit 1; }
 grep -E "Current version of schema|Successfully applied|Migrating schema" "$ROOT/logs/server.log" | tail -3
-# 3) 결제 서비스 켜기
-( cd "$ROOT/sbada-payment" && chmod +x gradlew && nohup ./gradlew bootRun --console=plain > "$ROOT/logs/payment.log" 2>&1 & )
-for i in $(seq 1 60); do curl -s -o /dev/null -m 2 http://127.0.0.1:8098/api/payment/health && break; sleep 3; done
+# 3) 허브(Kafka) + 물품 서버 + 결제 서비스 켜기
+"$ROOT/scripts/start-msa-bg.sh" --wait
 curl -s -m 3 http://127.0.0.1:8098/api/payment/health && echo || { echo "결제 서비스가 안 켜짐 → logs/payment.log"; tail -30 "$ROOT/logs/payment.log"; exit 1; }
 # 4) 결제 흐름 호출(게이트웨이 8097 경유)
 tok() { curl -s -H 'Content-Type: application/json' --data-binary "@$ROOT/scripts/json/login-$1.json" $B/api/auth/login | sed -E 's/.*"accessToken":"([^"]+)".*/\1/'; }

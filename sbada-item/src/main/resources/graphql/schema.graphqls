@@ -1,0 +1,62 @@
+# 스바다 물품 목록 조회 (GraphQL, 2026-11-25 MSA 2단계)
+# 앱은 필요한 칸만 골라 받는다. 등록 · 수정 · 삭제 · 찜하기는 REST 그대로(/api/items …).
+# 주소: POST /graphql (메인 서버 게이트웨이 → 물품 서버). 로그인 토큰이 있으면 likedByMe 가 채워진다.
+#
+# 예) { items(area: "서울 마포구", limit: 20) { id title price imageUrls owner { nickname region } likedByMe } }
+
+type Query {
+  "교환 가능한 물건 목록(최신순). q 는 초성 · 여러 단어 · 등록자 동네까지 검색"
+  items(category: String, q: String, area: String, limit: Int = 50): [Item!]!
+  "물건 하나(조회 수는 올리지 않는다. 상세 화면은 REST GET /api/items/{id})"
+  item(id: Int!): Item
+  "내가 올린 물건(로그인 필요)"
+  myItems: [Item!]!
+  "내 관심목록(로그인 필요)"
+  myLikes: [Item!]!
+  "범위 안의 교환 가능한 물건 수(전국이면 area 생략)"
+  itemCount(area: String): Int!
+  categories: [Category!]!
+}
+
+type Item {
+  id: Int!
+  title: String!
+  description: String
+  category: String!
+  categoryLabel: String!
+  categoryEmoji: String
+  condition: String!
+  conditionLabel: String!
+  status: String!
+  price: Int!
+  priceMin: Int!
+  priceMax: Int!
+  aiConfidence: Float!
+  aiReason: String
+  aiProvider: String
+  wishCategories: [String!]!
+  wishCategoryLabels: [String!]!
+  imageUrls: [String!]!
+  owner: Seller!
+  viewCount: Int!
+  requestCount: Int!
+  likeCount: Int!
+  createdAt: String!
+  moderationReason: String
+  farewellMessage: String
+  "로그인한 내가 찜했는지(목록 전체를 한 번에 확인 — DataLoader)"
+  likedByMe: Boolean!
+}
+
+type Seller {
+  id: Int!
+  nickname: String!
+  region: String!
+}
+
+type Category {
+  code: String!
+  label: String!
+  emoji: String
+  basePrice: Int!
+}

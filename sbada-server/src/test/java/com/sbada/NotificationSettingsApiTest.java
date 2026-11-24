@@ -32,6 +32,8 @@ class NotificationSettingsApiTest {
 
     @Autowired
     MockMvc mvc;
+    @Autowired
+    com.sbada.events.MainEventHandler events;
 
     @Test
     void settingsDefaultOnAndChangeOnlyWhatIsSent() throws Exception {
@@ -67,10 +69,14 @@ class NotificationSettingsApiTest {
         TestSupport.Account fan = TestSupport.newAccount(mvc, "likefan2");
         long itemId = TestSupport.createItem(mvc, owner, "찜 알림 테스트 시계", "DIGITAL", "GOOD", "[]");
 
-        // 두 번 찜해도 알림은 한 번
+        // 찜은 물품 서버의 일 → 찜 알림은 허브(Kafka sbada.notifications)로 온다. 같은 이벤트가 두 번 와도 알림은 한 번
+        String likeEvent = """
+                {"eventId":"like-%d","type":"NOTIFY","userId":%d,"notificationType":"ITEM_LIKED",
+                 "title":"누가 내 물건을 찜했어요","body":"%s님이 '찜 알림 테스트 시계'을(를) 관심목록에 담았어요.",
+                 "refType":"ITEM","refId":%d}
+                """.formatted(itemId, owner.id(), "팬", itemId);
         for (int i = 0; i < 2; i++) {
-            mvc.perform(post("/api/items/" + itemId + "/like").header("Authorization", fan.bearer()))
-                    .andExpect(status().isOk());
+            events.handle(likeEvent);
         }
         mvc.perform(get("/api/notifications").header("Authorization", owner.bearer()))
                 .andExpect(jsonPath("$.notifications[?(@.type == 'ITEM_LIKED')].refId").value(
@@ -82,8 +88,7 @@ class NotificationSettingsApiTest {
         mvc.perform(put("/api/me/notification-settings").header("Authorization", owner.bearer())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"like\":false}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/items/" + itemId + "/like").header("Authorization", fan.bearer()))
-                .andExpect(status().isOk()); // 이미 찜함 → 새 알림 없음
+        events.handle(likeEvent); // 같은 이벤트 → 새 알림 없음
         mvc.perform(get("/api/notifications").header("Authorization", owner.bearer()))
                 .andExpect(jsonPath("$.notifications[?(@.type == 'ITEM_LIKED')]",
                         org.hamcrest.Matchers.hasSize(1)));

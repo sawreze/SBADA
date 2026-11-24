@@ -53,51 +53,16 @@ final class TestSupport {
         return new Account(id.longValue(), username, token);
     }
 
-    static byte[] png(Color color) throws IOException {
-        BufferedImage img = new BufferedImage(64, 64, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = img.createGraphics();
-        g.setColor(color);
-        g.fillRect(0, 0, 64, 64);
-        g.dispose();
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageIO.write(img, "png", out);
-        return out.toByteArray();
-    }
-
-    static long uploadImage(MockMvc mvc, Account a) throws Exception {
-        MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", png(Color.ORANGE));
-        String body = mvc.perform(multipart("/api/images").file(file).header("Authorization", a.bearer()))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        Number id = JsonPath.read(body, "$.id");
-        return id.longValue();
-    }
-
-    static long analyze(MockMvc mvc, Account a, long imageId, String category, String condition) throws Exception {
-        String body = mvc.perform(post("/api/ai/analyze").header("Authorization", a.bearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"imageId\":%d,\"category\":\"%s\",\"condition\":\"%s\"}"
-                                .formatted(imageId, category, condition)))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        Number id = JsonPath.read(body, "$.analysisId");
-        return id.longValue();
-    }
-
-    /** 사진 업로드 → AI 분석 → 등록까지 한 번에. 등록된 물건 번호를 돌려준다. */
+    /**
+     * 물건 등록(2026-11-25 MSA 2단계): 물건은 물품 서버에 있으므로 메인 서버 테스트에서는 가짜 물품 서비스(FakeServices)에 넣는다.
+     * 사진 업로드 · AI 분석 · 등록 흐름 자체는 물품 서버 테스트(sbada-item ItemServiceApiTest)가 확인한다.
+     */
     static long createItem(MockMvc mvc, Account a, String title, String category, String condition,
-                           String wishJsonArray) throws Exception {
-        long imageId = uploadImage(mvc, a);
-        long analysisId = analyze(mvc, a, imageId, category, condition);
-        String json = """
-                {"title":"%s","description":"테스트 물건","category":"%s","condition":"%s",
-                 "imageIds":[%d],"analysisId":%d,"wishCategories":%s}
-                """.formatted(title, category, condition, imageId, analysisId, wishJsonArray);
-        String body = mvc.perform(post("/api/items").header("Authorization", a.bearer())
-                        .contentType(MediaType.APPLICATION_JSON).content(json))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        Number id = JsonPath.read(body, "$.id");
-        return id.longValue();
+                           String wishJsonArray) {
+        return FakeServices.addItem(a.id(), title, category, condition, 100_000);
+    }
+
+    static long createItem(Account a, String title, String category, int price) {
+        return FakeServices.addItem(a.id(), title, category, "GOOD", price);
     }
 }

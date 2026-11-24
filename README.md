@@ -10,12 +10,16 @@
 | DB | H2 파일 DB(`./data/sbada`) · Spring Data JPA(Hibernate) |
 | 실시간 | WebSocket(`/ws`) — 채팅·알림 / FCM(선택) — 앱이 꺼져 있을 때 |
 | AI | Gemma 4 — Google AI Studio(`gemma-4-26b-a4b-it`) 또는 로컬 Ollama(`gemma4:e4b`), 없으면 기준가 추정 |
+| MSA | 서버 3개(메인 8097 · 물품 8099 · 결제 8098) · 서버끼리 gRPC · 이벤트는 Kafka · 물품 목록은 GraphQL → `docs/msa.md` |
 
 ## 폴더
 
 ```
 sbada/
-├─ sbada-server/   Spring Boot 서버 (포트 8097)
+├─ sbada-server/   메인 서버: 회원 · 교환 · 채팅 · 알림 + 게이트웨이 (포트 8097)
+├─ sbada-item/     물품 서버: 물건 · 사진 · AI · 추천 · 찜 · GraphQL (포트 8099)
+├─ sbada-payment/  결제 서버: 시연용 지갑 · 안전결제 (포트 8098)
+├─ sbada-proto/    세 서버가 같이 쓰는 gRPC 약속(.proto)
 ├─ sbada_app/      Flutter 앱
 ├─ docs/           아키텍처·API 명세·DB·알고리즘·상태 규칙·시연 대본
 └─ scripts/        cmd 로 실행·테스트하는 배치 파일

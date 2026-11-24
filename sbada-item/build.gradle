@@ -1,0 +1,102 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.1.1'
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'com.google.protobuf' version '0.9.6'
+}
+
+group = 'com.sbada'
+version = '0.1.0'
+description = '스바다 물품 마이크로서비스 - 물건 · 사진 · AI 가격 분석 · 추천 · 찜 (MSA 2단계)'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// 메인 서버와 같은 버전 구성. 물품 서비스는 자기 DB(H2 파일 ./data/item)를 따로 가진다
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	// 로그인 확인은 메인 서버와 같은 방식(Spring Security + JWT 필터). 토큰 발급은 메인 서버만
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	// 물품 목록 조회는 GraphQL(필요한 칸만 골라 받기). 등록 · 수정 · 삭제는 REST 그대로
+	implementation 'org.springframework.boot:spring-boot-starter-graphql'
+	// 배달부(gRPC) 서버 · 클라이언트 + 허브(Kafka)
+	implementation 'org.springframework.boot:spring-boot-starter-grpc-server'
+	implementation 'org.springframework.boot:spring-boot-starter-grpc-client'
+	implementation 'org.springframework.boot:spring-boot-starter-kafka'
+
+	// 메인 서버가 발급한 로그인 토큰(JWT)을 검증만 한다(발급은 하지 않음)
+	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.13.0'
+	runtimeOnly 'com.h2database:h2:2.4.240'
+
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.kafka:spring-kafka-test'
+	testImplementation 'io.grpc:grpc-inprocess'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+sourceSets {
+	main {
+		proto {
+			srcDir '../sbada-proto/proto'
+		}
+	}
+}
+
+protobuf {
+	plugins {
+		grpc {}
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+	testLogging {
+		events 'passed', 'failed', 'skipped'
+		exceptionFormat 'full'
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+	options.compilerArgs << '-parameters'
+}
+
+// ===== 2026-11-25 클라우드 컴파일용: 필요한 jar 를 미리 받아 두고 클래스패스 목록을 남긴다 =====
+//  ./gradlew prefetch → build/prefetch-cp.txt (비밀값 없음, jar 경로만)
+//  리눅스용 protoc · gRPC 플러그인도 함께 받아 둔다(클라우드에서 .proto → 자바 코드 생성)
+tasks.register('prefetch') {
+	doLast {
+		def names = ['compileClasspath', 'runtimeClasspath', 'testCompileClasspath', 'testRuntimeClasspath', 'annotationProcessor']
+		def files = new LinkedHashSet()
+		names.each { n -> def c = project.configurations.findByName(n); if (c != null) files.addAll(c.resolve()) }
+		def pv = project.dependencyManagement.importedProperties['protobuf-java.version']
+		def gv = project.dependencyManagement.importedProperties['grpc-java.version']
+		println "protobuf-java.version=${pv} grpc-java.version=${gv}"
+		if (pv != null && gv != null) {
+			def tools = project.configurations.detachedConfiguration(
+					project.dependencies.create("com.google.protobuf:protoc:${pv}:linux-x86_64@exe"),
+					project.dependencies.create("io.grpc:protoc-gen-grpc-java:${gv}:linux-x86_64@exe"))
+			tools.transitive = false
+			files.addAll(tools.resolve())
+		}
+		def out = project.layout.buildDirectory.file('prefetch-cp.txt').get().asFile
+		out.parentFile.mkdirs()
+		out.text = files.collect { it.absolutePath }.join('\n') + '\n'
+		println "PREFETCH_OK ${files.size()} files → ${out}"
+	}
+}

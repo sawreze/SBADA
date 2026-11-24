@@ -20,9 +20,10 @@ import com.sbada.chat.ChatService;
 import com.sbada.common.AfterCommit;
 import com.sbada.common.ApiException;
 import com.sbada.gateway.PaymentClient;
-import com.sbada.item.Item;
-import com.sbada.item.ItemRepository;
-import com.sbada.item.ItemStatus;
+import com.sbada.events.EventPublisher;
+import com.sbada.events.Topics;
+import com.sbada.items.ItemCatalog;
+import com.sbada.items.ItemRef;
 import com.sbada.notification.NotificationService;
 import com.sbada.notification.NotificationType;
 import com.sbada.realtime.RealtimeHub;
@@ -56,7 +57,8 @@ import com.sbada.user.PreferenceService;
 public class ExchangeService {
 
     private final ExchangeRepository exchanges;
-    private final ItemRepository items;
+    private final ItemCatalog items;      // 2026-11-25 MSA 2단계: 물건은 물품 서버에(배달부 gRPC)
+    private final EventPublisher events;  // 허브(Kafka)로 교환 이벤트를 알린다
     private final AppUserRepository users;
     private final ChatService chat;
     private final NotificationService notifications;
@@ -70,12 +72,13 @@ public class ExchangeService {
      */
     private final Set<String> instantExchangeUsers;
 
-    public ExchangeService(ExchangeRepository exchanges, ItemRepository items, AppUserRepository users,
-                           ChatService chat, NotificationService notifications, PreferenceService preferences,
-                           RealtimeHub hub, PaymentClient payments,
+    public ExchangeService(ExchangeRepository exchanges, ItemCatalog items, EventPublisher events,
+                           AppUserRepository users, ChatService chat, NotificationService notifications,
+                           PreferenceService preferences, RealtimeHub hub, PaymentClient payments,
                            @Value("${sbada.demo.instant-exchange-users:}") String instantExchangeUsers) {
         this.exchanges = exchanges;
         this.items = items;
+        this.events = events;
         this.users = users;
         this.chat = chat;
         this.notifications = notifications;
@@ -101,58 +104,64 @@ public class ExchangeService {
                                             long extraAmount, String extraPayer) {
         checkExtraAmount(extraAmount);
         // ① 존재 확인(404) → 권한(403) → 업무 규칙(400) → 상태(409) 순서
-        Item target = requireItem(targetItemId);
-        Item offered = requireItem(offeredItemId);
+        ItemRef target = items.require(targetItemId);   // 물품 서버에 묻는다(없거나 내려감 → 404, 꺼짐 → 503)
+        ItemRef offered = items.require(offeredItemId);
         if (!offered.isOwnedBy(userId)) {
             throw ApiException.forbidden("NOT_OWNER", "내가 등록한 물건만 교환에 내놓을 수 있습니다.");
         }
         if (target.isOwnedBy(userId)) {
             throw ApiException.badRequest("SELF_EXCHANGE", "내 물건끼리는 교환할 수 없습니다.");
         }
-        target.requireAvailable();   // 교환 완료된 물건이면 409 ITEM_NOT_AVAILABLE
-        offered.requireAvailable();
+        requireAvailable(target);    // 교환 완료된 물건이면 409 ITEM_NOT_AVAILABLE
+        requireAvailable(offered);
         // ② 같은 요청을 두 번 보내지 못하게
-        if (exchanges.existsBetween(offered.getId(), target.getId(), ExchangeStatus.REQUESTED)) {
+        if (exchanges.existsBetween(offered.id(), target.id(), ExchangeStatus.REQUESTED)) {
             throw ApiException.conflict("DUPLICATE_REQUEST", "이미 같은 물건으로 교환을 요청했어요. 상대의 답을 기다려 주세요.");
         }
         // 상대가 반대 방향으로 이미 요청했다면, 새로 보내지 말고 그 요청을 수락하도록 안내
-        if (exchanges.existsBetween(target.getId(), offered.getId(), ExchangeStatus.REQUESTED)) {
+        if (exchanges.existsBetween(target.id(), offered.id(), ExchangeStatus.REQUESTED)) {
             throw ApiException.conflict("REVERSE_REQUEST_EXISTS",
                     "상대가 먼저 같은 조합으로 교환을 요청했어요. 알림에서 수락해 주세요.");
         }
         // ③ 저장
         AppUser requester = users.getReferenceById(userId);
         String text = message == null || message.isBlank() ? null : message.trim();
-        ExchangeRequest request = exchanges.save(new ExchangeRequest(requester, offered, target, text));
+        AppUser owner = users.findById(target.ownerId())
+                .orElseThrow(() -> ApiException.notFound("ITEM_NOT_FOUND", "물건 주인을 찾을 수 없습니다."));
+        ExchangeRequest request = exchanges.save(new ExchangeRequest(requester, owner, offered.id(), target.id(), text));
+        Map<Long, ItemRef> refs = Map.of(offered.id(), offered, target.id(), target);
         if (extraAmount > 0) {
             request.setExtraTerms(extraAmount, "OTHER".equals(extraPayer)
                     ? ExchangeRequest.PAYER_OWNER : ExchangeRequest.PAYER_REQUESTER);
         }
-        target.increaseRequest();    // 상대 물건의 '교환 요청 수' +1 (인기도 점수에 쓰임)
+        // 상대 물건의 '교환 요청 수' +1(인기도)은 물품 서버의 일 → 허브(Kafka)로 알린다(같은 트랜잭션의 아웃박스)
+        events.publish(Topics.EXCHANGE, request.getId(), "EXCHANGE_REQUESTED", Map.of("exchangeId", request.getId(),
+                "offeredItemId", offered.id(), "targetItemId", target.id(), "requesterId", userId,
+                "ownerId", target.ownerId()));
 
         // ④ 채팅방 연결 + 제안 카드 메시지(PROPOSAL 타입, 교환 요청 번호를 함께 저장)
         ChatRoom room = chat.ensureRoom(target, requester);
         request.linkChatRoom(room.getId());
         chat.post(room, requester, ChatMessage.Type.PROPOSAL,
-                String.format("'%s'(으)로 '%s'을(를) 바꾸고 싶어요.%s%s", offered.getTitle(), target.getTitle(),
+                String.format("'%s'(으)로 '%s'을(를) 바꾸고 싶어요.%s%s", offered.title(), target.title(),
                         request.hasExtra() ? "\n" + extraLine(request) : "",
                         text == null ? "" : "\n" + text), request);
 
         // ⑤ 선호도 학습 + 받은 사람에게 알림(refType "EXCHANGE", refId = 요청 번호 → 앱이 눌렀을 때 제안 카드를 연다)
-        preferences.learn(userId, target.getCategory(), PreferenceService.Behavior.EXCHANGE_REQUEST);
+        preferences.learn(userId, target.categoryEnum(), PreferenceService.Behavior.EXCHANGE_REQUEST);
         // 시연 계정(admin 등): 상대의 수락을 기다리지 않고 같은 트랜잭션에서 바로 성사 처리
         if (instantExchangeUsers.contains(requester.getUsername())) {
             complete(request, true);
-            return ExchangeDtos.ExchangeView.from(request, userId);
+            return ExchangeDtos.ExchangeView.from(request, userId, refs);
         }
-        notifications.notify(target.getOwner().getId(), NotificationType.EXCHANGE_REQUESTED,
+        notifications.notify(target.ownerId(), NotificationType.EXCHANGE_REQUESTED,
                 "교환 요청이 왔어요",
                 String.format("%s님이 '%s'(으)로 '%s'을(를) 바꾸고 싶어해요. 수락하면 교환이 완료돼요.",
-                        requester.getNickname(), offered.getTitle(), target.getTitle()),
+                        requester.getNickname(), offered.title(), target.title()),
                 "EXCHANGE", request.getId());
         // ⑥ 두 사람 화면 갱신 이벤트(커밋 후)
-        publish(request);
-        return ExchangeDtos.ExchangeView.from(request, userId);
+        publish(request, refs);
+        return ExchangeDtos.ExchangeView.from(request, userId, refs);
     }
 
     /** POST /api/exchanges/{id}/accept — 수락(교환 성사) */
@@ -163,7 +172,7 @@ public class ExchangeService {
             throw ApiException.forbidden("NOT_RECEIVER", "요청을 받은 사람만 수락할 수 있습니다.");
         }
         complete(request, false);
-        return ExchangeDtos.ExchangeView.from(request, userId);
+        return view(request, userId);
     }
 
     /**
@@ -172,18 +181,21 @@ public class ExchangeService {
      */
     private void complete(ExchangeRequest request, boolean instant) {
         long receiverId = request.getTargetOwner().getId();
-        Item offered = request.getOfferedItem();
-        Item target = request.getTargetItem();
         request.accept();          // REQUESTED 가 아니면 409
-        offered.markTraded();      // AVAILABLE 이 아니면 409
-        target.markTraded();
-        // flush(): 지금까지의 변경을 커밋 전에 DB 로 즉시 보낸다(UPDATE 실행).
-        // Item 의 @Version 이 다른 요청과 부딪히면 여기서 예외가 나서 409 CONCURRENT_UPDATE 로 응답된다.
-        items.flush();             // @Version 충돌을 이 요청 안에서 409 로 돌려주기 위해 바로 반영
+        // 2026-11-25 MSA 2단계: 두 물건을 거래 완료로 바꾸는 일은 물품 서버가 한 트랜잭션에서(배달부 gRPC CompleteTrade).
+        //  하나라도 이미 교환 · 내려감이면 409 → 이 트랜잭션(수락)도 취소된다.
+        //  (gRPC 성공 뒤 이 트랜잭션이 실패하는 드문 경우는 물건만 TRADED 로 남는다 — 사가 보상은 다음 단계 과제)
+        items.completeTrade(request.getId(), request.getOfferedItemId(), request.getTargetItemId());
 
         // 두 물건이 걸린 '다른' 대기 요청은 더 이상 이룰 수 없으므로 자동 취소 + 그 요청자에게 알림
-        for (ExchangeRequest other : exchanges.findInvolving(List.of(offered.getId(), target.getId()),
-                ExchangeStatus.REQUESTED)) {
+        List<ExchangeRequest> others = exchanges.findInvolving(
+                List.of(request.getOfferedItemId(), request.getTargetItemId()), ExchangeStatus.REQUESTED);
+        java.util.Set<Long> ids = new java.util.HashSet<>(List.of(request.getOfferedItemId(), request.getTargetItemId()));
+        others.forEach(o -> ids.add(o.getTargetItemId()));
+        Map<Long, ItemRef> refs = items.get(ids);
+        ItemRef offered = ref(refs, request.getOfferedItemId());
+        ItemRef target = ref(refs, request.getTargetItemId());
+        for (ExchangeRequest other : others) {
             if (other.getId().equals(request.getId())) { // Long 끼리는 == 가 아니라 equals 로 값 비교
                 continue;
             }
@@ -192,26 +204,28 @@ public class ExchangeService {
             notifications.notify(other.getRequester().getId(), NotificationType.EXCHANGE_CANCELED,
                     "교환 요청이 취소되었어요",
                     String.format("'%s'이(가) 다른 교환으로 거래 완료되어 요청이 자동 취소되었어요.",
-                            other.getTargetItem().getTitle()),
+                            ref(refs, other.getTargetItemId()).title()),
                     "EXCHANGE", other.getId());
-            publish(other);
+            publish(other, refs);
         }
 
         // 교환 성사는 가장 강한 관심 신호(+0.3): 요청자는 받은 물건 종류를, 수락자는 받은 물건 종류를 더 좋아한다고 학습
-        preferences.learn(request.getRequester().getId(), target.getCategory(), PreferenceService.Behavior.TRADE);
-        preferences.learn(receiverId, offered.getCategory(), PreferenceService.Behavior.TRADE);
-        postSystem(request, String.format("🎉 교환이 성사되었어요! '%s' ↔ '%s'", offered.getTitle(), target.getTitle()));
+        preferences.learn(request.getRequester().getId(), target.categoryEnum(), PreferenceService.Behavior.TRADE);
+        preferences.learn(receiverId, offered.categoryEnum(), PreferenceService.Behavior.TRADE);
+        events.publish(Topics.EXCHANGE, request.getId(), "EXCHANGE_ACCEPTED", Map.of("exchangeId", request.getId(),
+                "offeredItemId", request.getOfferedItemId(), "targetItemId", request.getTargetItemId()));
+        postSystem(request, String.format("🎉 교환이 성사되었어요! '%s' ↔ '%s'", offered.title(), target.title()));
         if (instant) {
             notifications.notify(receiverId, NotificationType.EXCHANGE_ACCEPTED,
                     "교환이 성사되었어요 🎉",
                     String.format("%s님과 '%s' ↔ '%s' 교환이 바로 성사되었어요(시연 계정). 채팅으로 만날 약속을 정해 보세요.",
-                            request.getRequester().getNickname(), offered.getTitle(), target.getTitle()),
+                            request.getRequester().getNickname(), offered.title(), target.title()),
                     "EXCHANGE", request.getId());
         } else {
             notifications.notify(request.getRequester().getId(), NotificationType.EXCHANGE_ACCEPTED,
                     "교환이 성사되었어요 🎉",
                     String.format("%s님이 '%s' ↔ '%s' 교환을 수락했어요. 채팅으로 만날 약속을 정해 보세요.",
-                            request.getTargetOwner().getNickname(), offered.getTitle(), target.getTitle()),
+                            request.getTargetOwner().getNickname(), offered.title(), target.title()),
                     "EXCHANGE", request.getId());
         }
         publish(request);
@@ -230,10 +244,10 @@ public class ExchangeService {
         notifications.notify(request.getRequester().getId(), NotificationType.EXCHANGE_REJECTED,
                 "교환 요청이 거절되었어요",
                 String.format("'%s' 교환 요청이 거절되었어요. 비슷한 가격대의 다른 물건을 찾아볼까요?",
-                        request.getTargetItem().getTitle()),
+                        itemTitle(request.getTargetItemId())),
                 "EXCHANGE", request.getId());
         publish(request);
-        return ExchangeDtos.ExchangeView.from(request, userId);
+        return view(request, userId);
     }
 
     /** POST /api/exchanges/{id}/cancel — 보낸 사람이 취소 */
@@ -249,23 +263,28 @@ public class ExchangeService {
         notifications.notify(request.getTargetOwner().getId(), NotificationType.EXCHANGE_CANCELED,
                 "교환 요청이 취소되었어요",
                 String.format("%s님이 '%s' 교환 요청을 취소했어요.", request.getRequester().getNickname(),
-                        request.getTargetItem().getTitle()),
+                        itemTitle(request.getTargetItemId())),
                 "EXCHANGE", request.getId());
         publish(request);
-        return ExchangeDtos.ExchangeView.from(request, userId);
+        return view(request, userId);
     }
 
-    /** 물건을 삭제(숨김)할 때 그 물건이 걸린 대기 요청을 모두 취소한다. (ItemService.delete 가 같은 트랜잭션에서 부름) */
+    /**
+     * 물건이 내려가거나(삭제) · 보류되거나 · 다른 교환으로 거래 완료되면 그 물건이 걸린 대기 요청을 모두 취소한다.
+     * 2026-11-25 MSA 2단계: 물품 서버의 허브(Kafka) 이벤트 ITEM_STATUS_CHANGED 를 받아 MainEventHandler 가 부른다.
+     */
     @Transactional
-    public void cancelAllFor(Item item, String reason) {
-        for (ExchangeRequest other : exchanges.findInvolving(List.of(item.getId()), ExchangeStatus.REQUESTED)) {
-            other.cancel(reason);
+    public void cancelAllFor(long itemId, long ownerId, String title, String reason) {
+        String name = title == null || title.isBlank() ? "물건" : title;
+        String why = reason == null || reason.isBlank() ? "물건이 내려가서 교환 요청이 취소되었어요." : reason;
+        for (ExchangeRequest other : exchanges.findInvolving(List.of(itemId), ExchangeStatus.REQUESTED)) {
+            other.cancel(why.length() > 120 ? why.substring(0, 120) : why);
             refundIfPaid(other, "물건이 내려가서");
             // 알림 대상 = 물건 주인이 아닌 쪽(주인이 보낸 요청이면 받은 사람에게, 아니면 보낸 사람에게)
-            long notifyUser = other.getRequester().getId().equals(item.getOwner().getId())
+            long notifyUser = other.getRequester().getId() == ownerId
                     ? other.getTargetOwner().getId() : other.getRequester().getId();
             notifications.notify(notifyUser, NotificationType.EXCHANGE_CANCELED, "교환 요청이 취소되었어요",
-                    String.format("'%s'이(가) 내려가서 요청이 취소되었어요.", item.getTitle()),
+                    String.format("'%s'이(가) 내려가서 요청이 취소되었어요.", name),
                     "EXCHANGE", other.getId());
             publish(other);
         }
@@ -278,7 +297,7 @@ public class ExchangeService {
         if (!request.isRequestedBy(userId) && !request.isReceivedBy(userId)) {
             throw ApiException.forbidden("NOT_PARTICIPANT", "교환 당사자만 볼 수 있습니다.");
         }
-        return ExchangeDtos.ExchangeView.from(request, userId);
+        return view(request, userId);
     }
 
     /** GET /api/exchanges?box= — "sent" 가 아니면 모두 받은 요청으로 처리 */
@@ -286,7 +305,13 @@ public class ExchangeService {
     public ExchangeDtos.ExchangeList list(long userId, String box) {
         List<ExchangeRequest> list = "sent".equalsIgnoreCase(box) ? exchanges.findSent(userId)
                 : exchanges.findReceived(userId);
-        return new ExchangeDtos.ExchangeList(list.stream().map(e -> ExchangeDtos.ExchangeView.from(e, userId)).toList());
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        list.forEach(e -> {
+            ids.add(e.getOfferedItemId());
+            ids.add(e.getTargetItemId());
+        });
+        Map<Long, ItemRef> refs = items.get(ids); // 물건 요약을 한 번에(물건마다 묻지 않는다)
+        return new ExchangeDtos.ExchangeList(list.stream().map(e -> ExchangeDtos.ExchangeView.from(e, userId, refs)).toList());
     }
 
     // ───────────── 2026-11-25 추가 금액 · 안전결제 ─────────────
@@ -310,10 +335,10 @@ public class ExchangeService {
         postSystem(request, "💰 " + me.getNickname() + "님: " + line);
         notifications.notify(otherId, NotificationType.EXCHANGE_REQUESTED,
                 request.hasExtra() ? (iPay ? "추가 금액 제안이 왔어요" : "추가 금액 요청이 왔어요") : "추가 금액 조건이 없어졌어요",
-                String.format("'%s' 교환 — %s", request.getTargetItem().getTitle(), line),
+                String.format("'%s' 교환 — %s", itemTitle(request.getTargetItemId()), line),
                 "EXCHANGE", request.getId());
         publish(request);
-        return ExchangeDtos.ExchangeView.from(request, userId);
+        return view(request, userId);
     }
 
     /**
@@ -336,7 +361,7 @@ public class ExchangeService {
             throw ApiException.conflict("NOT_ACCEPTED", "교환이 성사된 뒤에 수령 확인을 할 수 있어요.");
         }
         if (request.payment() == PaymentStatus.RELEASED) {
-            return ExchangeDtos.ExchangeView.from(request, userId); // 이미 정산됨(두 번 눌러도 안전)
+            return view(request, userId); // 이미 정산됨(두 번 눌러도 안전)
         }
         if (request.payment() != PaymentStatus.PAID_HELD) {
             throw ApiException.conflict("NOT_PAID", "아직 추가 금액이 결제되지 않았어요.");
@@ -348,10 +373,10 @@ public class ExchangeService {
                 postSystem(request, "📦 " + me.getNickname() + "님이 물건을 받았어요. (수령 확인 1/2)");
                 notifications.notify(otherId, NotificationType.EXCHANGE_ACCEPTED, "상대가 물건을 받았어요",
                         String.format("'%s' 교환 — 물건을 받았으면 '물건 받았어요'를 눌러 주세요. 둘 다 누르면 추가 금액이 정산돼요.",
-                                request.getTargetItem().getTitle()),
+                                itemTitle(request.getTargetItemId())),
                         "EXCHANGE", request.getId());
                 publish(request);
-                return ExchangeDtos.ExchangeView.from(request, userId);
+                return view(request, userId);
             }
             postSystem(request, "📦 " + me.getNickname() + "님도 물건을 받았어요. (수령 확인 2/2)");
         }
@@ -359,7 +384,7 @@ public class ExchangeService {
             payments.release(request.getId()); // 실패하면 ApiException(503 · 409) → 이 트랜잭션도 취소
             markPayment(request, PaymentStatus.RELEASED);
         }
-        return ExchangeDtos.ExchangeView.from(request, userId);
+        return view(request, userId);
     }
 
     /** POST /api/exchanges/{id}/refund-extra — 받는 사람이 결제된 추가 금액을 돌려준다(교환이 틀어졌을 때) */
@@ -370,14 +395,14 @@ public class ExchangeService {
             throw ApiException.forbidden("NOT_PAYEE", "추가 금액을 받을 사람만 돌려줄 수 있어요.");
         }
         if (request.payment() == PaymentStatus.REFUNDED) {
-            return ExchangeDtos.ExchangeView.from(request, userId);
+            return view(request, userId);
         }
         if (request.payment() != PaymentStatus.PAID_HELD && request.payment() != PaymentStatus.REFUND_PENDING) {
             throw ApiException.conflict("NOT_REFUNDABLE", "돌려줄 수 있는 결제가 없어요(현재: " + request.getPaymentStatus() + ").");
         }
         payments.refund(request.getId(), "상대가 추가 금액을 돌려줘서");
         markPayment(request, PaymentStatus.REFUNDED);
-        return ExchangeDtos.ExchangeView.from(request, userId);
+        return view(request, userId);
     }
 
     /**
@@ -484,8 +509,10 @@ public class ExchangeService {
         if (request.getChatRoomId() == null) {
             return;
         }
-        ChatRoom room = chat.ensureRoom(request.getTargetItem(), request.getRequester());
-        chat.post(room, null, ChatMessage.Type.SYSTEM, content, request);
+        ChatRoom room = chat.roomOf(request.getChatRoomId());
+        if (room != null) {
+            chat.post(room, null, ChatMessage.Type.SYSTEM, content, request);
+        }
     }
 
     /**
@@ -495,10 +522,14 @@ public class ExchangeService {
      * 람다 안에서 쓰는 지역 변수(requesterId 등)는 값이 바뀌지 않아야 한다(effectively final).
      */
     private void publish(ExchangeRequest request) {
+        publish(request, items.get(List.of(request.getOfferedItemId(), request.getTargetItemId())));
+    }
+
+    private void publish(ExchangeRequest request, Map<Long, ItemRef> refs) {
         long requesterId = request.getRequester().getId();
         long ownerId = request.getTargetOwner().getId();
-        ExchangeDtos.ExchangeView forRequester = ExchangeDtos.ExchangeView.from(request, requesterId);
-        ExchangeDtos.ExchangeView forOwner = ExchangeDtos.ExchangeView.from(request, ownerId);
+        ExchangeDtos.ExchangeView forRequester = ExchangeDtos.ExchangeView.from(request, requesterId, refs);
+        ExchangeDtos.ExchangeView forOwner = ExchangeDtos.ExchangeView.from(request, ownerId, refs);
         AfterCommit.run(() -> {
             hub.sendToUser(requesterId, Map.of("type", "exchange.updated", "exchange", forRequester));
             hub.sendToUser(ownerId, Map.of("type", "exchange.updated", "exchange", forOwner));
@@ -510,10 +541,25 @@ public class ExchangeService {
                 .orElseThrow(() -> ApiException.notFound("EXCHANGE_NOT_FOUND", "교환 요청을 찾을 수 없습니다."));
     }
 
-    /** 물건 찾기(내린 물건은 없는 것으로) */
-    private Item requireItem(long id) {
-        return items.findById(id)
-                .filter(i -> i.getStatus() != ItemStatus.HIDDEN)
-                .orElseThrow(() -> ApiException.notFound("ITEM_NOT_FOUND", "물건을 찾을 수 없습니다."));
+    /** 교환 카드 한 장(물건 요약은 물품 서버에서) */
+    private ExchangeDtos.ExchangeView view(ExchangeRequest r, Long viewerId) {
+        return ExchangeDtos.ExchangeView.from(r, viewerId, items.get(List.of(r.getOfferedItemId(), r.getTargetItemId())));
+    }
+
+    private static ItemRef ref(Map<Long, ItemRef> refs, long id) {
+        return refs.getOrDefault(id, ItemRef.unknown(id));
+    }
+
+    /** 알림 문구용 물건 이름(물품 서버가 꺼져 있으면 '물건') */
+    private String itemTitle(long itemId) {
+        ItemRef r = items.get(List.of(itemId)).get(itemId);
+        return r == null ? "물건" : r.title();
+    }
+
+    /** 교환할 수 있는 물건인지(예전 Item.requireAvailable 과 같은 오류) */
+    private static void requireAvailable(ItemRef item) {
+        if (!item.isAvailable()) {
+            throw ApiException.conflict("ITEM_NOT_AVAILABLE", "이미 교환되었거나 내려간 물건입니다.");
+        }
     }
 }

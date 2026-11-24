@@ -50,14 +50,21 @@ class DemoInstantExchangeTest {
         return "Bearer " + JsonPath.read(body, "$.accessToken");
     }
 
+    /** 시연 물건 번호(옛 표에서 찾고, 물품 서버(가짜)에 그 물건을 올려 둔다 — 물품 서버가 옛 데이터를 가져간 상태) */
     long itemOf(String username, String title) {
-        return jdbc.queryForObject("""
-                select i.id from items i join app_users u on u.id = i.owner_id
-                where u.username = ? and i.title = ?""", Long.class, username, title);
+        var row = jdbc.queryForMap("""
+                select i.id, i.owner_id, i.ai_price, i.category, i.item_condition from items i
+                join app_users u on u.id = i.owner_id where u.username = ? and i.title = ?""", username, title);
+        long id = ((Number) row.get("ID")).longValue();
+        FakeServices.ITEMS.put(id, new FakeServices.FakeItem(id, ((Number) row.get("OWNER_ID")).longValue(), title,
+                ((Number) row.get("AI_PRICE")).intValue(), String.valueOf(row.get("CATEGORY")),
+                String.valueOf(row.get("ITEM_CONDITION")), "AVAILABLE"));
+        return id;
     }
 
+    /** 물건 상태는 물품 서버(가짜)에 있다 */
     String statusOf(long itemId) {
-        return jdbc.queryForObject("select status from items where id = ?", String.class, itemId);
+        return FakeServices.status(itemId);
     }
 
     @Test

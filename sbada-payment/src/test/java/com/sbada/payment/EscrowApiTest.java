@@ -135,6 +135,38 @@ class EscrowApiTest {
                 .extracting(e -> e.getEventType()).contains("ESCROW_HELD", "ESCROW_RELEASED");
     }
 
+    /** 배달부(gRPC :9098) — 메인 서버가 정산 · 환불을 부르는 길. 토큰 없으면 UNAUTHENTICATED, 업무 오류는 "코드|메시지" */
+    @Test
+    void grpcReleaseAndRefund() throws Exception {
+        long payer = IDS.incrementAndGet();
+        long payee = IDS.incrementAndGet();
+        long ex = EXCHANGES.incrementAndGet();
+        hold(payer, payee, ex, 10_000, "CARD").andExpect(status().isOk());
+
+        io.grpc.ManagedChannel ch = io.grpc.inprocess.InProcessChannelBuilder.forName("payment-test").directExecutor().build();
+        try {
+            var bare = com.sbada.grpc.payment.v1.EscrowServiceGrpc.newBlockingStub(ch);
+            var cmd = com.sbada.grpc.payment.v1.EscrowCommand.newBuilder().setExchangeId(ex).build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> bare.release(cmd))
+                    .hasMessageContaining("UNAUTHENTICATED");
+            io.grpc.Metadata md = new io.grpc.Metadata();
+            md.put(io.grpc.Metadata.Key.of("x-internal-token", io.grpc.Metadata.ASCII_STRING_MARSHALLER), internalToken());
+            var stub = bare.withInterceptors(io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(md));
+            assertThat(stub.release(cmd).getStatus()).isEqualTo("RELEASED");
+            assertThat(stub.release(cmd).getStatus()).isEqualTo("RELEASED"); // 두 번 불러도 한 번만
+            mvc.perform(get("/api/wallet").header("Authorization", bearer(payee)))
+                    .andExpect(jsonPath("$.balance").value(110_000));
+            // 정산된 건 환불 → FAILED_PRECONDITION + 코드
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> stub.refund(cmd))
+                    .hasMessageContaining("FAILED_PRECONDITION").hasMessageContaining("ALREADY_RELEASED");
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> stub.release(
+                            com.sbada.grpc.payment.v1.EscrowCommand.newBuilder().setExchangeId(999_999_999L).build()))
+                    .hasMessageContaining("NOT_FOUND").hasMessageContaining("ESCROW_NOT_FOUND");
+        } finally {
+            ch.shutdownNow();
+        }
+    }
+
     @Test
     void walletPaymentIsRefundedToWallet() throws Exception {
         long payer = IDS.incrementAndGet();

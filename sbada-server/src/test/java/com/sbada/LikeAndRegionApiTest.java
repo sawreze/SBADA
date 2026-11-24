@@ -15,7 +15,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** 찜(관심목록) POST/DELETE /api/items/{id}/like · GET /api/me/likes, 내 동네 설정 PUT /api/me/region */
+/** 내 정보 · 프로필 사진 · 동네 설정 PUT /api/me/region (찜은 2026-11-25 물품 서버 ItemLikeApiTest 로 옮김) */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:sbada-like-test;DB_CLOSE_DELAY=-1",
         "spring.jpa.hibernate.ddl-auto=create-drop",
@@ -31,62 +31,8 @@ class LikeAndRegionApiTest {
 
     @Autowired
     MockMvc mvc;
-
-    @Test
-    void likeUnlikeAndList() throws Exception {
-        TestSupport.Account owner = TestSupport.newAccount(mvc, "likeown");
-        TestSupport.Account fan = TestSupport.newAccount(mvc, "likefan");
-        long itemId = TestSupport.createItem(mvc, owner, "찜 테스트 헤드폰", "DIGITAL", "GOOD", "[]");
-
-        // 로그인 없이 찜 → 401
-        mvc.perform(post("/api/items/" + itemId + "/like")).andExpect(status().isUnauthorized());
-        // 내 물건 찜 → 400 SELF_LIKE
-        mvc.perform(post("/api/items/" + itemId + "/like").header("Authorization", owner.bearer()))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("SELF_LIKE"));
-        // 없는 물건 → 404
-        mvc.perform(post("/api/items/999999/like").header("Authorization", fan.bearer()))
-                .andExpect(status().isNotFound());
-
-        // 찜하기 두 번 → 결과 같음, 관심목록에는 한 번만
-        for (int i = 0; i < 2; i++) {
-            mvc.perform(post("/api/items/" + itemId + "/like").header("Authorization", fan.bearer()))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.liked").value(true));
-        }
-        mvc.perform(get("/api/me/likes").header("Authorization", fan.bearer()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items", hasSize(1)))
-                .andExpect(jsonPath("$.items[0].id").value(itemId))
-                .andExpect(jsonPath("$.items[0].title").value("찜 테스트 헤드폰"));
-        // 다른 사람의 관심목록에는 없다
-        mvc.perform(get("/api/me/likes").header("Authorization", owner.bearer()))
-                .andExpect(jsonPath("$.items", hasSize(0)));
-        // 찜 수(likeCount): 두 번 눌러도 1 — 물건 상세 · 관심목록 모두
-        mvc.perform(get("/api/items/" + itemId).header("Authorization", owner.bearer()))
-                .andExpect(jsonPath("$.likeCount").value(1));
-        mvc.perform(get("/api/me/likes").header("Authorization", fan.bearer()))
-                .andExpect(jsonPath("$.items[0].likeCount").value(1));
-
-        // 해제(두 번 해도 같음) → 관심목록 비어 있음
-        for (int i = 0; i < 2; i++) {
-            mvc.perform(delete("/api/items/" + itemId + "/like").header("Authorization", fan.bearer()))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.liked").value(false));
-        }
-        mvc.perform(get("/api/me/likes").header("Authorization", fan.bearer()))
-                .andExpect(jsonPath("$.items", hasSize(0)));
-        mvc.perform(get("/api/items/" + itemId).header("Authorization", owner.bearer()))
-                .andExpect(jsonPath("$.likeCount").value(0));
-
-        // 내린 물건은 관심목록에서 빠진다
-        mvc.perform(post("/api/items/" + itemId + "/like").header("Authorization", fan.bearer()))
-                .andExpect(status().isOk());
-        mvc.perform(delete("/api/items/" + itemId).header("Authorization", owner.bearer()))
-                .andExpect(status().is2xxSuccessful());
-        mvc.perform(get("/api/me/likes").header("Authorization", fan.bearer()))
-                .andExpect(jsonPath("$.items", hasSize(0)));
-    }
+    @Autowired
+    com.sbada.events.OutboxRepository outbox;
 
     @Test
     void changeProfilePasswordAndPhoto() throws Exception {
@@ -100,6 +46,9 @@ class LikeAndRegionApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.user.username").value(newName))
                 .andExpect(jsonPath("$.user.nickname").value("새닉네임"));
+        // 물품 서버의 판매자 사본도 고치도록 허브(Kafka sbada.user.events)로 알릴 이벤트가 아웃박스에
+        org.assertj.core.api.Assertions.assertThat(outbox.findAll()).anySatisfy(e -> org.assertj.core.api.Assertions
+                .assertThat(e.getPayload()).contains("USER_UPDATED").contains("새닉네임").contains("\"userId\":" + a.id()));
         // 남이 쓰는 아이디 → 409
         mvc.perform(put("/api/me/profile").header("Authorization", a.bearer()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + other.username() + "\",\"nickname\":\"새닉네임\"}"))
@@ -119,8 +68,9 @@ class LikeAndRegionApiTest {
                 .andExpect(status().isOk());
 
         // 프로필 사진: 내가 올린 사진만, null 이면 지우기
-        long mine = TestSupport.uploadImage(mvc, a);
-        long theirs = TestSupport.uploadImage(mvc, other);
+        // 사진은 물품 서버에 있다 → 메인 서버는 배달부(gRPC GetImage)로 '내가 올린 사진인지' 확인(테스트는 가짜 물품 서비스)
+        long mine = FakeServices.addImage(a.id());
+        long theirs = FakeServices.addImage(other.id());
         mvc.perform(put("/api/me/photo").header("Authorization", a.bearer()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"imageId\":" + theirs + "}"))
                 .andExpect(status().isForbidden());

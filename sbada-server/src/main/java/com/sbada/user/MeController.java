@@ -20,8 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.sbada.common.ApiException;
 import com.sbada.common.Category;
-import com.sbada.image.ImageService;
-import com.sbada.image.ItemImage;
+import com.sbada.items.ItemCatalog;
 
 import jakarta.validation.Valid;
 
@@ -50,14 +49,16 @@ public class MeController {
     private final AppUserRepository users;
     private final PreferenceService preferenceService;
     private final PasswordEncoder passwordEncoder;
-    private final ImageService images;
+    private final ItemCatalog images; // 사진은 물품 서버에(2026-11-25 MSA 2단계)
+    private final UserEvents userEvents;
 
     public MeController(AppUserRepository users, PreferenceService preferenceService, PasswordEncoder passwordEncoder,
-                        ImageService images) {
+                        ItemCatalog images, UserEvents userEvents) {
         this.users = users;
         this.preferenceService = preferenceService;
         this.passwordEncoder = passwordEncoder;
         this.images = images;
+        this.userEvents = userEvents;
     }
 
     /**
@@ -140,7 +141,7 @@ public class MeController {
         AppUser user = users.findById(userId)
                 .orElseThrow(() -> new ApiException(401, "TOKEN_INVALID", "사용자를 확인할 수 없습니다."));
         user.changeRegion(input.region());
-        users.save(user);
+        userEvents.saveAndAnnounce(user); // 물품 서버의 판매자 사본도 고치도록 허브로 알림
         return me(auth);
     }
 
@@ -158,7 +159,7 @@ public class MeController {
             throw ApiException.badRequest("SAME_REGION", "지금 동네와 같은 동네예요.");
         }
         user.changeSecondRegion(input.region());
-        users.save(user);
+        userEvents.saveAndAnnounce(user); // 물품 서버의 판매자 사본도 고치도록 허브로 알림
         return me(auth);
     }
 
@@ -170,7 +171,7 @@ public class MeController {
     public UserDtos.MeView deleteSecondRegion(Authentication auth) {
         AppUser user = requireMe(auth);
         user.changeSecondRegion(null);
-        users.save(user);
+        userEvents.saveAndAnnounce(user); // 물품 서버의 판매자 사본도 고치도록 허브로 알림
         return me(auth);
     }
 
@@ -187,7 +188,7 @@ public class MeController {
             throw ApiException.conflict("NO_SECOND_REGION", "추가한 동네가 없어요. 계정정보에서 동네를 하나 더 추가해 주세요.");
         }
         user.swapRegions();
-        users.save(user);
+        userEvents.saveAndAnnounce(user); // 물품 서버의 판매자 사본도 고치도록 허브로 알림
         return me(auth);
     }
 
@@ -206,7 +207,7 @@ public class MeController {
             throw ApiException.conflict("USERNAME_EXISTS", "이미 사용 중인 아이디입니다.");
         }
         user.changeProfile(username, input.nickname());
-        users.save(user);
+        userEvents.saveAndAnnounce(user); // 물품 서버의 판매자 사본도 고치도록 허브로 알림
         return me(auth);
     }
 
@@ -241,8 +242,8 @@ public class MeController {
     public UserDtos.MeView changePhoto(@RequestBody UserDtos.PhotoRequest input, Authentication auth) {
         AppUser user = requireMe(auth);
         if (input.imageId() != null) {
-            ItemImage image = images.require(input.imageId());
-            if (image.getUploader().getId() != user.getId().longValue()) {
+            long uploader = images.imageUploader(input.imageId()); // 물품 서버에 배달부(gRPC)로 확인
+            if (uploader != user.getId().longValue()) {
                 throw ApiException.forbidden("NOT_IMAGE_OWNER", "내가 올린 사진만 프로필로 쓸 수 있어요.");
             }
         }

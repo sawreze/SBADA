@@ -7,8 +7,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -19,14 +17,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.jayway.jsonpath.JsonPath;
 import com.sbada.gateway.InternalToken;
-import com.sun.net.httpserver.HttpServer;
 
 /**
  * 금융 백엔드(2026-11-25) — 메인 서버 쪽: 교환 추가 금액 + 안전결제 상태
@@ -48,37 +43,9 @@ import com.sun.net.httpserver.HttpServer;
 @AutoConfigureMockMvc
 class ExchangeExtraPaymentTest {
 
-    /** 가짜 결제 서비스: /internal/escrow/release · refund 를 받으면 기록하고 성공으로 답한다 */
-    private static final List<String> CALLS = new CopyOnWriteArrayList<>();
-    private static final HttpServer FAKE_PAYMENT;
-    private static final AtomicInteger EVENTS = new AtomicInteger();
-
-    static {
-        try {
-            FAKE_PAYMENT = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
-        FAKE_PAYMENT.createContext("/internal/escrow/", exchange -> {
-            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            boolean authed = exchange.getRequestHeaders().getFirst(InternalToken.HEADER) != null;
-            CALLS.add(exchange.getRequestURI().getPath() + " " + body + (authed ? " token" : " no-token"));
-            String status = exchange.getRequestURI().getPath().endsWith("release") ? "RELEASED" : "REFUNDED";
-            byte[] out = ("{\"status\":\"" + status + "\"}").getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, out.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(out);
-            }
-        });
-        FAKE_PAYMENT.start();
-    }
-
-    @DynamicPropertySource
-    static void paymentUrl(DynamicPropertyRegistry registry) {
-        registry.add("sbada.services.payment.url",
-                () -> "http://127.0.0.1:" + FAKE_PAYMENT.getAddress().getPort());
-    }
+    private static final java.util.concurrent.atomic.AtomicLong EVENTS = new java.util.concurrent.atomic.AtomicLong();
+    /** 결제 서버(가짜 gRPC EscrowService)로 간 정산 · 환불 호출: "release 7" · "refund 7 이유" */
+    private static final List<String> CALLS = FakeServices.ESCROW_CALLS;
 
     @Autowired
     MockMvc mvc;
@@ -173,8 +140,7 @@ class ExchangeExtraPaymentTest {
                 .andExpect(jsonPath("$.paymentStatus").value("PAID_HELD"))
                 .andExpect(jsonPath("$.iReceived").value(true))
                 .andExpect(jsonPath("$.otherReceived").value(false));
-        assertThat(CALLS).noneSatisfy(c -> assertThat(c)
-                .startsWith("/internal/escrow/release").contains("\"exchangeId\":" + d.exchangeId()));
+        assertThat(CALLS).doesNotContain("release " + d.exchangeId());
         view(d.requester(), d.exchangeId())
                 .andExpect(jsonPath("$.iReceived").value(false))
                 .andExpect(jsonPath("$.otherReceived").value(true));
@@ -184,10 +150,7 @@ class ExchangeExtraPaymentTest {
                 .andExpect(jsonPath("$.paymentStatus").value("RELEASED"))
                 .andExpect(jsonPath("$.iReceived").value(true))
                 .andExpect(jsonPath("$.otherReceived").value(true));
-        assertThat(CALLS).anySatisfy(c -> assertThat(c)
-                .startsWith("/internal/escrow/release")
-                .contains("\"exchangeId\":" + d.exchangeId())
-                .endsWith(" token"));
+        assertThat(CALLS).contains("release " + d.exchangeId()); // 배달부(gRPC)로 결제 서버에 정산 요청
 
         // 정산 이벤트가 뒤늦게 와도 상태는 그대로(멱등), 두 번 눌러도 그대로
         paymentEvent("ESCROW_RELEASED", d.owner().id(), d.exchangeId());
@@ -205,8 +168,7 @@ class ExchangeExtraPaymentTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELED"))
                 .andExpect(jsonPath("$.paymentStatus").value("REFUND_PENDING"));
-        assertThat(CALLS).anySatisfy(c -> assertThat(c)
-                .startsWith("/internal/escrow/refund").contains("\"exchangeId\":" + d.exchangeId()));
+        assertThat(CALLS).anySatisfy(c -> assertThat(c).startsWith("refund " + d.exchangeId() + " "));
 
         // 결제 서비스의 환불 이벤트 → REFUNDED
         paymentEvent("ESCROW_REFUNDED", d.requester().id(), d.exchangeId());
@@ -220,8 +182,7 @@ class ExchangeExtraPaymentTest {
         action(late.requester(), late.exchangeId(), "cancel").andExpect(status().isOk());
         paymentEvent("ESCROW_HELD", late.requester().id(), late.exchangeId());
         view(late.requester(), late.exchangeId()).andExpect(jsonPath("$.paymentStatus").value("REFUND_PENDING"));
-        assertThat(CALLS).anySatisfy(c -> assertThat(c)
-                .startsWith("/internal/escrow/refund").contains("\"exchangeId\":" + late.exchangeId()));
+        assertThat(CALLS).anySatisfy(c -> assertThat(c).startsWith("refund " + late.exchangeId() + " "));
 
         // ② 상대(물건 주인)가 내는 조건: 주인이 결제 → 성사 → 받을 사람(요청자)이 돌려주기
         Deal d = newDeal("xo", 20_000, "OTHER");
@@ -232,8 +193,7 @@ class ExchangeExtraPaymentTest {
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("NOT_PAYEE"));
         action(d.requester(), d.exchangeId(), "refund-extra")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.paymentStatus").value("REFUNDED"));
-        assertThat(CALLS).anySatisfy(c -> assertThat(c)
-                .startsWith("/internal/escrow/refund").contains("\"exchangeId\":" + d.exchangeId()));
+        assertThat(CALLS).anySatisfy(c -> assertThat(c).startsWith("refund " + d.exchangeId() + " "));
     }
 
     @Test

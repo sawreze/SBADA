@@ -3,7 +3,7 @@ package com.sbada.chat;
 import java.util.List;
 
 import com.sbada.exchange.ExchangeDtos;
-import com.sbada.item.ItemDtos;
+import com.sbada.items.ItemRef;
 import com.sbada.user.UserDtos;
 
 import jakarta.validation.constraints.NotBlank;
@@ -30,7 +30,7 @@ public final class ChatDtos {
     }
 
     /** partner = 나 말고 상대방 */
-    public record RoomView(long id, ItemDtos.ItemSummary item, UserDtos.PublicUser partner, boolean iAmOwner,
+    public record RoomView(long id, ItemRef.ItemSummary item, UserDtos.PublicUser partner, boolean iAmOwner,
                            String lastMessage, String lastMessageAt, long unread) {
     }
 

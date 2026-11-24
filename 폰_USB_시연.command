@@ -50,16 +50,14 @@ else
 fi
 API="http://$HOST:8097"
 
-say "2) 서버 다시 켜기(새 코드 반영) — 메인 서버 + 결제 서비스(가상 거래)"
-for port in 8097 8098; do PID="$(lsof -ti tcp:$port -sTCP:LISTEN 2>/dev/null)"; [ -n "$PID" ] && { say "  포트 $port 종료"; kill $PID; }; done
+say "2) 서버 다시 켜기(새 코드 반영) — 허브(Kafka) + 메인 · 물품 · 결제 서버(가상 거래)"
+for port in 8097 8098 8099; do PID="$(lsof -ti tcp:$port -sTCP:LISTEN 2>/dev/null)"; [ -n "$PID" ] && { say "  포트 $port 종료"; kill $PID; }; done
 sleep 3
 osascript -e "tell application \"Terminal\" to do script \"cd '$ROOT/sbada-server' && ./gradlew bootRun --console=plain --args='--spring.profiles.active=dev --server.address=$BIND --spring.h2.console.enabled=false' 2>&1 | tee '$ROOT/logs/server.log'\"" >/dev/null
 for i in $(seq 1 90); do curl -s -o /dev/null -m 2 "$API/api/health" && break; sleep 2; done
 curl -s -o /dev/null -m 2 "$API/api/health" && say "  메인 서버 OK ($API)" || { say "  메인 서버가 안 떠요 → 새로 열린 터미널 창 · logs/server.log 확인"; bye 1; }
-( cd "$ROOT/sbada-payment" && chmod +x gradlew && nohup ./gradlew bootRun --console=plain > "$ROOT/logs/payment.log" 2>&1 & )
-for i in $(seq 1 90); do curl -s -o /dev/null -m 2 http://127.0.0.1:8098/api/payment/health && break; sleep 2; done
-if curl -s -o /dev/null -m 2 http://127.0.0.1:8098/api/payment/health; then say "  결제 서비스 OK (시연 모드 · 가상 거래)"
-else say "  결제 서비스가 안 떠요 → logs/payment.log (교환 · 채팅은 되고 결제만 503)"; fi
+"$ROOT/scripts/start-msa-bg.sh" --wait | while IFS= read -r line; do say "  $line"; done
+say "  (물품 서버가 안 뜨면 목록 · 등록이 503, 결제 서버가 안 뜨면 결제만 503 — 교환 · 채팅은 메인 서버라 그대로)"
 
 if [ "$KIND" = android ]; then
   say "3) USB 로 폰 ↔ 맥 서버 연결(adb reverse)"

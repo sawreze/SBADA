@@ -4,13 +4,16 @@
 #  비밀값(GEMMA_API_KEY 등)은 이미지에 넣지 않고 클라우드의 환경 변수로 넣는다
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /src
-COPY . .
+# 빌드 위치는 저장소 맨 위(세 서버가 같은 .proto 를 쓰므로): docker build -f sbada-server/Dockerfile .
+COPY sbada-proto ./sbada-proto
+COPY sbada-server ./sbada-server
+WORKDIR /src/sbada-server
 RUN chmod +x gradlew && ./gradlew bootJar --no-daemon -x test
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-COPY --from=build /src/build/libs/sbada-server-0.1.0.jar app.jar
+COPY --from=build /src/sbada-server/build/libs/sbada-server-0.1.0.jar app.jar
 # 무료 플랜 메모리(512MB)에 맞춤. DB(H2)와 사진은 컨테이너 안 ./data — 다시 배포하거나 재시작하면 처음 시연 데이터로 돌아간다
 ENV JAVA_OPTS="-Xmx350m -XX:+UseSerialGC"
-EXPOSE 8097
+EXPOSE 8097 9097
 CMD ["sh", "-c", "java $JAVA_OPTS -Dserver.address=0.0.0.0 -Dserver.port=${PORT:-8097} -jar app.jar"]

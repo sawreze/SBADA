@@ -9,9 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.sbada.ai.AiDtos;
-import com.sbada.ai.AiPriceService;
-import com.sbada.item.ItemRepository;
+import com.sbada.items.ItemCatalog;
 import com.sbada.realtime.RealtimeHub;
 import com.sbada.user.AppUserRepository;
 
@@ -25,13 +23,11 @@ import com.sbada.user.AppUserRepository;
 public class HealthController {
 
     private final Instant startedAt = Instant.now(); // 이 빈이 만들어진 시각 = 서버 시작 시각
-    private final AiPriceService ai;
     private final RealtimeHub hub;
     private final AppUserRepository users;
-    private final ItemRepository items;
+    private final ItemCatalog items; // 2026-11-25 MSA 2단계: 물건 수 · AI 는 물품 서버에
 
-    public HealthController(AiPriceService ai, RealtimeHub hub, AppUserRepository users, ItemRepository items) {
-        this.ai = ai;
+    public HealthController(RealtimeHub hub, AppUserRepository users, ItemCatalog items) {
         this.hub = hub;
         this.users = users;
         this.items = items;
@@ -47,15 +43,15 @@ public class HealthController {
      */
     @GetMapping("/api/health")
     public Map<String, Object> health() {
-        AiDtos.AiStatus status = ai.status();
+        long itemCount = items.count(); // 물품 서버(gRPC). -1 = 꺼짐
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("status", "UP");
         body.put("app", "sbada-server");
         body.put("uptimeSeconds", Duration.between(startedAt, Instant.now()).toSeconds());
         body.put("users", users.count());
-        body.put("items", items.count());
+        body.put("items", Math.max(0, itemCount));
+        body.put("itemService", itemCount < 0 ? "DOWN" : "UP");
         body.put("websocketOnlineUsers", hub.onlineUsers());
-        body.put("ai", status);
         return body;
     }
 
@@ -66,7 +62,7 @@ public class HealthController {
      */
     @GetMapping(value = "/", produces = MediaType.TEXT_HTML_VALUE)
     public String home() {
-        AiDtos.AiStatus status = ai.status();
+        long itemCount = items.count();
         return """
                 <!doctype html><html lang="ko"><head><meta charset="utf-8">
                 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -82,13 +78,13 @@ public class HealthController {
                 <p class="ok">● 실행 중 (UP)</p>
                 <ul>
                  <li>회원 %d명 · 물건 %d개 · WebSocket 접속자 %d명</li>
-                 <li>AI 가격 분석: <b>%s</b> (설정: %s, Gemma 모델: %s / %s)</li>
+                 <li>물품 서버(gRPC :9099 · HTTP :8099): <b>%s</b> · AI 상태: <a href="/api/ai/status">/api/ai/status</a></li>
                  <li>상태 JSON: <a href="/api/health">/api/health</a></li>
                  <li>공개 목록: <a href="/api/items">/api/items</a> · 카테고리: <a href="/api/categories">/api/categories</a></li>
                  <li>WebSocket: <code>ws://127.0.0.1:8097/ws?token=JWT</code> (에뮬레이터는 10.0.2.2)</li>
                  <li>H2 콘솔(dev 프로필): <a href="/h2-console">/h2-console</a></li>
                 </ul></div></body></html>
-                """.formatted(users.count(), items.count(), hub.onlineUsers(), status.active(), status.setting(),
-                status.googleModel(), status.ollamaModel());
+                """.formatted(users.count(), Math.max(0, itemCount), hub.onlineUsers(),
+                itemCount < 0 ? "꺼짐" : "실행 중");
     }
 }

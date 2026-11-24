@@ -32,25 +32,60 @@ void main() {
     expect(seen['/api/health'], isNull);
   });
 
-  test('목록 응답 {"items":[...]} 에서 items 를 꺼내고 한글을 UTF-8 로 읽는다', () async {
+  test('물품 목록은 GraphQL(POST /graphql)로 받고, data.items 를 꺼내 한글을 UTF-8 로 읽는다', () async {
     final body = utf8.encode(jsonEncode({
-      'items': [
+      'data': {
+        'items': [
+          {
+            'id': 7,
+            'title': '파란 우산',
+            'category': 'ETC',
+            'condition': 'GOOD',
+            'status': 'AVAILABLE',
+            'price': 5000,
+            'owner': {'id': 2, 'nickname': '준호', 'region': '망원동'},
+            'likedByMe': true,
+          }
+        ]
+      }
+    }));
+    late http.Request seen;
+    final client = MockClient((req) async {
+      seen = req;
+      return http.Response.bytes(body, 200);
+    });
+    final repo = ItemRepository(ApiClient(baseUrl: 'http://test', session: session, client: client));
+    final items = await repo.latest(area: '서울 마포구', limit: 20);
+    expect(items.single.title, '파란 우산');
+    expect(items.single.owner.nickname, '준호');
+    expect(seen.method, 'POST');
+    expect(seen.url.path, '/graphql');
+    final sent = jsonDecode(seen.body) as Map<String, dynamic>;
+    expect(sent['query'] as String, contains('items('));
+    expect(sent['query'] as String, contains('owner { id nickname region }'));
+    expect((sent['variables'] as Map)['area'], '서울 마포구');
+    expect((sent['variables'] as Map)['limit'], 20);
+    expect(seen.headers['Authorization'], 'Bearer test-token');
+  });
+
+  test('GraphQL 오류(errors)는 REST 와 같은 ApiException(코드 · 메시지)으로 바뀐다', () async {
+    final body = utf8.encode(jsonEncode({
+      'errors': [
         {
-          'id': 7,
-          'title': '파란 우산',
-          'category': 'ETC',
-          'condition': 'GOOD',
-          'status': 'AVAILABLE',
-          'price': 5000,
-          'owner': {'id': 2, 'nickname': '준호'},
+          'message': '로그인이 필요합니다.',
+          'extensions': {'code': 'AUTH_REQUIRED', 'classification': 'UNAUTHORIZED'}
         }
-      ]
+      ],
+      'data': null
     }));
     final client = MockClient((req) async => http.Response.bytes(body, 200));
     final repo = ItemRepository(ApiClient(baseUrl: 'http://test', session: session, client: client));
-    final items = await repo.latest();
-    expect(items.single.title, '파란 우산');
-    expect(items.single.owner.nickname, '준호');
+    await expectLater(
+        repo.mine(),
+        throwsA(isA<ApiException>()
+            .having((e) => e.status, 'status', 401)
+            .having((e) => e.code, 'code', 'AUTH_REQUIRED')
+            .having((e) => e.message, 'message', '로그인이 필요합니다.')));
   });
 
   test('204 처럼 본문이 없는 성공은 null 이다(JSON 파싱 오류가 아님)', () async {

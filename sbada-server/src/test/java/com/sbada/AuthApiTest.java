@@ -73,7 +73,7 @@ class AuthApiTest {
     void tokenRules() throws Exception {
         TestSupport.Account a = TestSupport.newAccount(mvc, "tok");
         // 공개 GET: 토큰 없이 200
-        mvc.perform(get("/api/items")).andExpect(status().isOk()).andExpect(jsonPath("$.items").isArray());
+        mvc.perform(get("/api/health")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("UP"));
         // 보호 API: 토큰 없음 401
         mvc.perform(get("/api/me")).andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
@@ -82,7 +82,7 @@ class AuthApiTest {
                 .andExpect(jsonPath("$.user.id").value(a.id()));
         // 변조 토큰 401 (공개 GET 이라도 헤더가 붙어 있으면 거절)
         String tampered = a.token().substring(0, a.token().length() - 3) + "abc";
-        mvc.perform(get("/api/items").header("Authorization", "Bearer " + tampered))
+        mvc.perform(get("/api/health").header("Authorization", "Bearer " + tampered))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
         // 만료 토큰 401 TOKEN_EXPIRED

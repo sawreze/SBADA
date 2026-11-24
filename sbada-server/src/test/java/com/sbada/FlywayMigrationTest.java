@@ -39,6 +39,10 @@ class FlywayMigrationTest {
 
     @Autowired
     MockMvc mvc;
+    @Autowired
+    com.sbada.gateway.LegacyExport legacy;
+    @Autowired
+    com.sbada.gateway.InternalToken internal;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -46,9 +50,9 @@ class FlywayMigrationTest {
     @Test
     void migrationsCreateSchemaAndDemoData() {
         Integer applied = jdbc.queryForObject(
-                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18')",
+                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19')",
                 Integer.class);
-        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(18);
+        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(19);
         // V2 시연 계정 4명 + V9 전국 판매자 135명 + V11 서울 판매자 50명 + V12 admin
         org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("select count(*) from app_users", Integer.class))
                 .isEqualTo(190);
@@ -76,8 +80,21 @@ class FlywayMigrationTest {
                 "select count(*) from item_images where stored_name like 'seed-p%'", Integer.class)).isEqualTo(50);
     }
 
+    /** 물품 서버가 옛 데이터를 가져간 상태를 흉내: 메인 DB 의 옛 물건 표 → 가짜 물품 서비스 */
+    @SuppressWarnings("unchecked")
+    private void seedFakeItemService() {
+        for (Object o : (java.util.List<Object>) legacy.export().get("items")) {
+            java.util.Map<String, Object> r = (java.util.Map<String, Object>) o;
+            long id = ((Number) r.get("id")).longValue();
+            FakeServices.ITEMS.put(id, new FakeServices.FakeItem(id, ((Number) r.get("owner_id")).longValue(),
+                    (String) r.get("title"), ((Number) r.get("ai_price")).intValue(), String.valueOf(r.get("category")),
+                    String.valueOf(r.get("item_condition")), String.valueOf(r.get("status"))));
+        }
+    }
+
     @Test
     void demoAccountsWorkLikeBefore() throws Exception {
+        seedFakeItemService();
         String login = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"minji\",\"password\":\"sbada1234\"}"))
                 .andExpect(status().isOk())
@@ -98,22 +115,12 @@ class FlywayMigrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.unread").value(1));
 
-        // 추천 피드 후보 = 남의 물건(764개 중 민지 것 12개를 뺀 752개) 중 최대 300개(서버가 추천 후보 수를 300개로 제한)
-        mvc.perform(get("/api/feed").header("Authorization", bearer))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.candidates").value(300))
-                .andExpect(jsonPath("$.items.length()", greaterThan(0)));
-
         // 채팅방: 도현의 교환 제안(가장 최근, 민지 입장에서 안 읽은 1개) + V12 admin 의 일렉 기타에 민지가 물어본 채팅
         mvc.perform(get("/api/chats").header("Authorization", bearer))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rooms", hasSize(2)))
                 .andExpect(jsonPath("$.rooms[0].unread").value(1));
 
-        // 홈 범위(서울 서대문구 = V11 에서만 8개): 피드 후보도 그 안에서만
-        mvc.perform(get("/api/feed").param("area", "서울 서대문구").header("Authorization", bearer))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.candidates").value(8));
     }
 
     /** V12 시연 계정 admin: 가격대별 물건 14개 · 채팅 7개(안 읽음 5) · 받은 요청 2 · 보낸 요청 3 · 안 읽은 알림 3 */
@@ -127,16 +134,18 @@ class FlywayMigrationTest {
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         String bearer = "Bearer " + JsonPath.read(login, "$.accessToken");
 
-        String mine = mvc.perform(get("/api/me/items").header("Authorization", bearer))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items", hasSize(14)))
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        java.util.List<Integer> prices = JsonPath.read(mine, "$.items[*].price");
+        // admin 의 물건 14개(가격대별) — 물건은 물품 서버가 옮겨 가는 옛 표에서 확인(2026-11-25 MSA 2단계)
+        seedFakeItemService();
+        java.util.List<Integer> prices = jdbc.queryForList("""
+                select i.ai_price from items i join app_users u on u.id = i.owner_id
+                where u.username = 'admin' and i.status <> 'HIDDEN'""", Integer.class);
+        org.assertj.core.api.Assertions.assertThat(prices).hasSize(14);
         org.assertj.core.api.Assertions.assertThat(prices).contains(7000, 340000)
                 .anyMatch(p -> p < 10000).anyMatch(p -> p >= 10000 && p < 50000)
                 .anyMatch(p -> p >= 50000 && p < 200000).anyMatch(p -> p >= 200000);
-        java.util.List<java.util.List<String>> photos = JsonPath.read(mine, "$.items[*].imageUrls");
-        org.assertj.core.api.Assertions.assertThat(photos).allMatch(urls -> urls.size() == 1);
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("""
+                select count(*) from item_images m join items i on i.id = m.item_id join app_users u on u.id = i.owner_id
+                where u.username = 'admin'""", Integer.class)).isEqualTo(14);
 
         String chats = mvc.perform(get("/api/chats").header("Authorization", bearer))
                 .andExpect(status().isOk())
@@ -153,37 +162,23 @@ class FlywayMigrationTest {
                 .andExpect(jsonPath("$.unread").value(3));
     }
 
+    /** 물품 서버로 넘길 옛 데이터(GET /internal/legacy/items-export): 물건 764 · 판매자(회원) 전원 · 사진 · 원하는 카테고리 */
     @Test
-    void areaRangeCountsAndFilters() throws Exception {
-        // 전국 = 764(V4 50 + V9 500 + V11 200 + V12 14), '전국'이라고 보내도 전국
-        mvc.perform(get("/api/items/count")).andExpect(jsonPath("$.count").value(764));
-        mvc.perform(get("/api/items/count").param("area", "전국")).andExpect(jsonPath("$.count").value(764));
-        // 서대문구는 V11 에서만 8개(동네 2곳 × 4) · 그중 신촌동 4개
-        mvc.perform(get("/api/items/count").param("area", "서울 서대문구"))
-                .andExpect(jsonPath("$.area").value("서울 서대문구"))
-                .andExpect(jsonPath("$.count").value(8));
-        mvc.perform(get("/api/items/count").param("area", "서울 서대문구 신촌동")).andExpect(jsonPath("$.count").value(4));
-        // 단어 단위 비교: '중구'(서울 중구)가 '해운대구' · '수성구' 같은 이름 속 글자에 걸리지 않는다
-        Integer jungguDb = jdbc.queryForObject("""
-                select count(*) from items i join app_users u on u.id = i.owner_id
-                where i.status = 'AVAILABLE' and (u.region like '% 중구 %' or u.region like '중구 %')""", Integer.class);
-        mvc.perform(get("/api/items/count").param("area", "중구")).andExpect(jsonPath("$.count").value(jungguDb));
-        // 목록도 같은 범위로 거른다
-        mvc.perform(get("/api/items").param("area", "서울 서대문구").param("limit", "100"))
-                .andExpect(jsonPath("$.items", hasSize(8)))
-                .andExpect(jsonPath("$.items[0].owner.region").value(org.hamcrest.Matchers.startsWith("서울 서대문구 ")));
-        // LIKE 특수문자는 막는다
-        mvc.perform(get("/api/items/count").param("area", "서울%")).andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void seedImagesAreServed() throws Exception {
-        String items = mvc.perform(get("/api/items").param("q", "이어폰"))
+    @SuppressWarnings("unchecked")
+    void legacyExportCarriesSeedItems() throws Exception {
+        java.util.Map<String, Object> ex = legacy.export();
+        org.assertj.core.api.Assertions.assertThat((java.util.List<Object>) ex.get("items")).hasSize(764);
+        org.assertj.core.api.Assertions.assertThat((java.util.List<Object>) ex.get("sellers"))
+                .hasSize(jdbc.queryForObject("select count(*) from app_users", Integer.class));
+        org.assertj.core.api.Assertions.assertThat((java.util.List<Object>) ex.get("item_images"))
+                .hasSize(jdbc.queryForObject("select count(*) from item_images", Integer.class));
+        java.util.Map<String, Object> first = (java.util.Map<String, Object>) ((java.util.List<Object>) ex.get("items")).get(0);
+        org.assertj.core.api.Assertions.assertThat(first).containsKeys("id", "owner_id", "title", "ai_price", "created_at");
+        org.assertj.core.api.Assertions.assertThat(first.get("created_at")).isInstanceOf(String.class);
+        // 내부 토큰 없이는 못 가져간다
+        mvc.perform(get("/internal/legacy/items-export")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/internal/legacy/items-export").header(com.sbada.gateway.InternalToken.HEADER, internal.value()))
                 .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        String url = JsonPath.read(items, "$.items[0].imageUrls[0]");
-        mvc.perform(get(url))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType("image/jpeg"));
+                .andExpect(jsonPath("$.items", hasSize(764)));
     }
 }

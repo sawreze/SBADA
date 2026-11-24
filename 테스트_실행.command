@@ -14,6 +14,8 @@ else
   term "cd '$ROOT' && scripts/run-server.sh 2>&1 | tee logs/server.log"
   for i in $(seq 1 60); do curl -s -o /dev/null -m 2 http://127.0.0.1:8097/api/health && break; sleep 3; done
 fi
+say "1-2) 허브(Kafka) · 물품 서버(8099) · 결제 서버(8098)"
+"$ROOT/scripts/start-msa-bg.sh" --wait
 
 say "2) Android 에뮬레이터"
 "$EMU" -version 2>&1 | head -2; file "$EMU"; echo "sdkmanager: ${SDKM:-없음}"

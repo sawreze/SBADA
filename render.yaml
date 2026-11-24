@@ -1,11 +1,14 @@
 # Render 블루프린트: Render 대시보드 > New > Blueprint 에서 이 GitHub 저장소를 고르면 서버가 만들어진다.
+# 주의(MSA 이후): 물품 · 결제 서버와 Kafka 가 따로 있어야 목록 · 결제가 된다. 무료 플랜 한 개로는 메인 서버만 떠서
+#  물품 목록은 503 이 난다 → 발표 · 시연은 맥에서(.command) 또는 docker compose 로.
 # 비밀값은 여기 적지 않는다(sync: false → Render 화면에서 직접 입력).
 services:
   - type: web
     name: sbada-server
     runtime: docker
-    rootDir: sbada-server
-    dockerfilePath: ./Dockerfile
+    # 2026-11-25 MSA: 세 서버가 같은 sbada-proto 를 쓰므로 빌드 위치는 저장소 맨 위
+    dockerContext: .
+    dockerfilePath: ./sbada-server/Dockerfile
     plan: free
     region: singapore
     healthCheckPath: /api/health

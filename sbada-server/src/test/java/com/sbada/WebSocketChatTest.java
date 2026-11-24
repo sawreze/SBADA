@@ -52,11 +52,9 @@ class WebSocketChatTest {
         String ownerToken = signupAndLogin(base, "wsowner");
         String buyerToken = signupAndLogin(base, "wsbuyer");
 
-        // 판매자 물건 등록(사진 없이 만들 수 없으므로 사진 → 등록)
-        long ownerImage = uploadPng(base, ownerToken);
-        long ownerItem = createItem(base, ownerToken, ownerImage, "캠핑 랜턴", "SPORTS");
-        long buyerImage = uploadPng(base, buyerToken);
-        long buyerItem = createItem(base, buyerToken, buyerImage, "등산 스틱", "SPORTS");
+        // 물건은 물품 서버에 있다(2026-11-25 MSA 2단계) → 테스트는 가짜 물품 서비스에 등록
+        long ownerItem = FakeServices.addItem(userId(base, ownerToken), "캠핑 랜턴", "SPORTS", "GOOD", 30_000);
+        long buyerItem = FakeServices.addItem(userId(base, buyerToken), "등산 스틱", "SPORTS", "GOOD", 30_000);
 
         // 판매자가 WebSocket 에 접속해 있다
         BlockingQueue<Map<String, Object>> ownerInbox = new LinkedBlockingQueue<>();
@@ -151,28 +149,12 @@ class WebSocketChatTest {
         return Json.readMap(login).get("accessToken").toString();
     }
 
-    private long uploadPng(String base, String token) throws Exception {
-        byte[] png = TestSupport.png(java.awt.Color.GREEN);
-        String boundary = "sbadaBoundary" + System.nanoTime();
-        byte[] head = ("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\n"
-                + "Content-Type: image/png\r\n\r\n").getBytes(StandardCharsets.UTF_8);
-        byte[] tail = ("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8);
-        byte[] all = new byte[head.length + png.length + tail.length];
-        System.arraycopy(head, 0, all, 0, head.length);
-        System.arraycopy(png, 0, all, head.length, png.length);
-        System.arraycopy(tail, 0, all, head.length + png.length, tail.length);
-        String res = send(HttpRequest.newBuilder(URI.create(base + "/api/images"))
-                .header("Authorization", "Bearer " + token)
-                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                .POST(HttpRequest.BodyPublishers.ofByteArray(all)).build(), 201);
-        return ((Number) Json.readMap(res).get("id")).longValue();
-    }
-
-    private long createItem(String base, String token, long imageId, String title, String category) throws Exception {
-        Map<String, Object> item = postJson(base + "/api/items", token,
-                "{\"title\":\"" + title + "\",\"category\":\"" + category + "\",\"condition\":\"GOOD\",\"imageIds\":["
-                        + imageId + "]}");
-        return ((Number) item.get("id")).longValue();
+    private long userId(String base, String token) throws Exception {
+        String me = send(HttpRequest.newBuilder(URI.create(base + "/api/me"))
+                .header("Authorization", "Bearer " + token).GET().build(), 200);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> user = (Map<String, Object>) Json.readMap(me).get("user");
+        return ((Number) user.get("id")).longValue();
     }
 
     private Map<String, Object> postJson(String url, String token, String json) throws Exception {

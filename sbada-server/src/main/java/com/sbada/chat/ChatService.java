@@ -18,10 +18,8 @@ import com.sbada.common.ApiException;
 import com.sbada.exchange.ExchangeDtos;
 import com.sbada.exchange.ExchangeRepository;
 import com.sbada.exchange.ExchangeRequest;
-import com.sbada.item.Item;
-import com.sbada.item.ItemDtos;
-import com.sbada.item.ItemRepository;
-import com.sbada.item.ItemStatus;
+import com.sbada.items.ItemCatalog;
+import com.sbada.items.ItemRef;
 import com.sbada.notification.NotificationService;
 import com.sbada.realtime.RealtimeHub;
 import com.sbada.user.AppUser;
@@ -46,14 +44,14 @@ public class ChatService {
 
     private final ChatRoomRepository rooms;
     private final ChatMessageRepository messages;
-    private final ItemRepository items;
+    private final ItemCatalog items; // 2026-11-25 MSA 2단계: 물건 정보는 물품 서버(배달부 gRPC)
     private final AppUserRepository users;
     private final ExchangeRepository exchanges;
     private final RealtimeHub hub;
     private final NotificationService notifications;
     private final PreferenceService preferences;
 
-    public ChatService(ChatRoomRepository rooms, ChatMessageRepository messages, ItemRepository items,
+    public ChatService(ChatRoomRepository rooms, ChatMessageRepository messages, ItemCatalog items,
                        AppUserRepository users, ExchangeRepository exchanges, RealtimeHub hub,
                        NotificationService notifications, PreferenceService preferences) {
         this.rooms = rooms;
@@ -69,18 +67,16 @@ public class ChatService {
     /** 물건 상세의 '채팅하기'. 같은 물건·같은 사람이면 기존 방을 돌려준다. (POST /api/chats) */
     @Transactional
     public ChatDtos.RoomView open(long itemId, long userId) {
-        Item item = items.findById(itemId)
-                .filter(i -> i.getStatus() != ItemStatus.HIDDEN)
-                .orElseThrow(() -> ApiException.notFound("ITEM_NOT_FOUND", "물건을 찾을 수 없습니다."));
+        ItemRef item = items.require(itemId); // 없거나 내려감 → 404, 물품 서버 꺼짐 → 503
         if (item.isOwnedBy(userId)) {
             throw ApiException.badRequest("SELF_CHAT", "내 물건에는 채팅을 걸 수 없습니다.");
         }
         boolean isNew = rooms.findByItemAndPartner(itemId, userId).isEmpty();
         ChatRoom room = ensureRoom(item, users.getReferenceById(userId));
         if (isNew) {
-            preferences.learn(userId, item.getCategory(), PreferenceService.Behavior.CHAT); // 처음 채팅 = 관심 +0.1
+            preferences.learn(userId, item.categoryEnum(), PreferenceService.Behavior.CHAT); // 처음 채팅 = 관심 +0.1
         }
-        return toRoomView(room, userId);
+        return toRoomView(room, userId, Map.of(item.id(), item));
     }
 
     /**
@@ -88,9 +84,15 @@ public class ChatService {
      * Optional.orElseGet(공급자): 비어 있을 때만 람다를 실행해 새 방을 저장한다(있으면 저장하지 않음).
      */
     @Transactional
-    public ChatRoom ensureRoom(Item item, AppUser partner) {
-        return rooms.findByItemAndPartner(item.getId(), partner.getId())
-                .orElseGet(() -> rooms.save(new ChatRoom(item, partner)));
+    public ChatRoom ensureRoom(ItemRef item, AppUser partner) {
+        return rooms.findByItemAndPartner(item.id(), partner.getId())
+                .orElseGet(() -> rooms.save(new ChatRoom(item.id(), users.getReferenceById(item.ownerId()), partner)));
+    }
+
+    /** 방 번호로 찾기(없으면 null) — 교환 서비스가 시스템 메시지를 남길 때 */
+    @Transactional(readOnly = true)
+    public ChatRoom roomOf(Long roomId) {
+        return roomId == null ? null : rooms.findById(roomId).orElse(null);
     }
 
     /**
@@ -109,7 +111,7 @@ public class ChatService {
         ChatMessage saved = messages.save(new ChatMessage(room, sender, ChatMessage.Type.TEXT, text, null));
         room.touch(text);
         room.markRead(userId, saved.getId()); // 내가 보낸 메시지까지는 당연히 읽은 것
-        ChatDtos.MessageView view = toMessageView(saved, Map.of(), userId);
+        ChatDtos.MessageView view = toMessageView(saved, Map.of(), Map.of(), userId);
         broadcast(room, view, clientMsgId);
 
         // 람다 안에서 쓸 값은 미리 지역 변수로 꺼내 둔다(커밋 후에는 트랜잭션·엔티티를 안전하게 쓸 수 없으므로)
@@ -131,7 +133,9 @@ public class ChatService {
             room.markRead(sender.getId(), saved.getId());
         }
         Map<Long, ExchangeRequest> ex = exchange == null ? Map.of() : Map.of(exchange.getId(), exchange);
-        broadcast(room, toMessageView(saved, ex, null), null);
+        Map<Long, ItemRef> refs = exchange == null ? Map.of()
+                : items.get(List.of(exchange.getOfferedItemId(), exchange.getTargetItemId()));
+        broadcast(room, toMessageView(saved, ex, refs, null), null);
     }
 
     /**
@@ -172,7 +176,9 @@ public class ChatService {
     /** GET /api/chats */
     @Transactional(readOnly = true)
     public ChatDtos.RoomList myRooms(long userId) {
-        List<ChatDtos.RoomView> list = rooms.findMine(userId).stream().map(r -> toRoomView(r, userId)).toList();
+        List<ChatRoom> mine = rooms.findMine(userId);
+        Map<Long, ItemRef> refs = items.get(mine.stream().map(ChatRoom::getItemId).collect(Collectors.toSet()));
+        List<ChatDtos.RoomView> list = mine.stream().map(r -> toRoomView(r, userId, refs)).toList();
         return new ChatDtos.RoomList(list);
     }
 
@@ -181,7 +187,7 @@ public class ChatService {
     public ChatDtos.RoomView room(long roomId, long userId) {
         ChatRoom room = requireRoom(roomId);
         room.requireMember(userId);
-        return toRoomView(room, userId);
+        return toRoomView(room, userId, items.get(List.of(room.getItemId())));
     }
 
     /** afterId 가 있으면 그 뒤만, 없으면 최근 100개 (GET /api/chats/{roomId}/messages) */
@@ -201,12 +207,16 @@ public class ChatService {
         Set<Long> exchangeIds = list.stream().map(ChatMessage::getExchangeId)
                 .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
         Map<Long, ExchangeRequest> ex = new HashMap<>();
+        Set<Long> itemIds = new java.util.HashSet<>();
         if (!exchangeIds.isEmpty()) {
             for (ExchangeRequest e : exchanges.findAllById(exchangeIds)) {
                 ex.put(e.getId(), e);
+                itemIds.add(e.getOfferedItemId());
+                itemIds.add(e.getTargetItemId());
             }
         }
-        return new ChatDtos.MessageList(list.stream().map(m -> toMessageView(m, ex, userId)).toList());
+        Map<Long, ItemRef> refs = items.get(itemIds); // 제안 카드의 물건 요약도 한 번에
+        return new ChatDtos.MessageList(list.stream().map(m -> toMessageView(m, ex, refs, userId)).toList());
     }
 
     private ChatRoom requireRoom(long roomId) {
@@ -215,20 +225,21 @@ public class ChatService {
     }
 
     /** 엔티티 → RoomView. 안 읽은 수는 매번 계산한다(lastReadId 뒤의 상대 메시지 수). */
-    private ChatDtos.RoomView toRoomView(ChatRoom r, long userId) {
+    private ChatDtos.RoomView toRoomView(ChatRoom r, long userId, Map<Long, ItemRef> refs) {
         long unread = messages.countUnread(r.getId(), userId, r.lastReadIdOf(userId));
-        return new ChatDtos.RoomView(r.getId(), ItemDtos.ItemSummary.from(r.getItem()),
+        return new ChatDtos.RoomView(r.getId(), refs.getOrDefault(r.getItemId(), ItemRef.unknown(r.getItemId())).summary(),
                 UserDtos.PublicUser.from(r.other(userId)), r.getOwner().getId() == userId,
                 r.getLastMessagePreview(), r.getLastMessageAt().toString(), unread);
     }
 
     /** 엔티티 → MessageView. 교환 요청이 연결된 메시지면 ExchangeView 를 함께 넣는다. */
-    private ChatDtos.MessageView toMessageView(ChatMessage m, Map<Long, ExchangeRequest> exchangesById, Long viewerId) {
+    private ChatDtos.MessageView toMessageView(ChatMessage m, Map<Long, ExchangeRequest> exchangesById,
+                                               Map<Long, ItemRef> refs, Long viewerId) {
         ExchangeDtos.ExchangeView ex = null;
         if (m.getExchangeId() != null) {
             ExchangeRequest e = exchangesById.get(m.getExchangeId());
             if (e != null) {
-                ex = ExchangeDtos.ExchangeView.from(e, viewerId);
+                ex = ExchangeDtos.ExchangeView.from(e, viewerId, refs);
             }
         }
         AppUser sender = m.getSender();

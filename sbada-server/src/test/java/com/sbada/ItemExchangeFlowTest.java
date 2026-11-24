@@ -1,5 +1,6 @@
 package com.sbada;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -41,88 +42,10 @@ class ItemExchangeFlowTest {
 
     @Autowired
     MockMvc mvc;
-
-    @Test
-    void uploadRejectsFakeImage() throws Exception {
-        TestSupport.Account a = TestSupport.newAccount(mvc, "img");
-        MockMultipartFile fake = new MockMultipartFile("file", "fake.png", "image/png",
-                "이건 PNG가 아니에요".getBytes(StandardCharsets.UTF_8));
-        mvc.perform(multipart("/api/images").file(fake).header("Authorization", a.bearer()))
-                .andExpect(status().isUnsupportedMediaType())
-                .andExpect(jsonPath("$.code").value("UNSUPPORTED_IMAGE"));
-    }
-
-    @Test
-    void aiAnalysisDecidesPriceAndOnlyOwnerCanUseImage() throws Exception {
-        TestSupport.Account a = TestSupport.newAccount(mvc, "ai");
-        TestSupport.Account b = TestSupport.newAccount(mvc, "ai");
-        long imageId = TestSupport.uploadImage(mvc, a);
-        // fallback: DIGITAL 기준가 150,000 × LIKE_NEW 0.85 = 127,500 → 130,000 (10만원 이상은 5,000원 단위)
-        mvc.perform(post("/api/ai/analyze").header("Authorization", a.bearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"imageId\":%d,\"category\":\"DIGITAL\",\"condition\":\"LIKE_NEW\"}".formatted(imageId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.provider").value("fallback"))
-                .andExpect(jsonPath("$.price").value(130_000))
-                .andExpect(jsonPath("$.category").value("DIGITAL"));
-        mvc.perform(post("/api/ai/analyze").header("Authorization", b.bearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"imageId\":%d}".formatted(imageId)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("NOT_IMAGE_OWNER"));
-    }
-
-    @Test
-    void priceInRequestBodyIsRejectedAndOwnerRulesApply() throws Exception {
-        TestSupport.Account a = TestSupport.newAccount(mvc, "own");
-        TestSupport.Account b = TestSupport.newAccount(mvc, "own");
-        long imageId = TestSupport.uploadImage(mvc, a);
-        // 가격은 서버가 정한다: 본문에 price 를 몰래 넣으면 400 으로 거절(7장: owner_id·status 를 넣으면 400)
-        String withPrice = """
-                {"title":"해리포터 세트","category":"BOOK","condition":"GOOD","imageIds":[%d],"price":999999999}
-                """.formatted(imageId);
-        mvc.perform(post("/api/items").header("Authorization", a.bearer())
-                        .contentType(MediaType.APPLICATION_JSON).content(withPrice))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("UNKNOWN_FIELD"))
-                .andExpect(jsonPath("$.errors.price").exists());
-        mvc.perform(get("/api/me/items").header("Authorization", a.bearer()))
-                .andExpect(jsonPath("$.items.length()").value(0));
-
-        // 정상 등록: 앞뒤 공백 정리, 가격은 AI(fallback) 가 정한 값 BOOK 8,000 × GOOD 0.7 = 5,600 → 5,500
-        String json = """
-                {"title":"  해리포터 세트  ","category":"BOOK","condition":"GOOD","imageIds":[%d]}
-                """.formatted(imageId);
-        String body = mvc.perform(post("/api/items").header("Authorization", a.bearer())
-                        .contentType(MediaType.APPLICATION_JSON).content(json))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.title").value("해리포터 세트"))
-                .andExpect(jsonPath("$.price").value(5_500))
-                .andExpect(jsonPath("$.status").value("AVAILABLE"))
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        long itemId = ((Number) JsonPath.read(body, "$.id")).longValue();
-
-        String edit = "{\"title\":\"남이 고친 제목\",\"description\":null,\"wishCategories\":[]}";
-        mvc.perform(put("/api/items/" + itemId).header("Authorization", b.bearer())
-                        .contentType(MediaType.APPLICATION_JSON).content(edit))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("NOT_OWNER"));
-        mvc.perform(get("/api/items/" + itemId)).andExpect(jsonPath("$.title").value("해리포터 세트"));
-
-        mvc.perform(post("/api/items").header("Authorization", a.bearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\"\",\"category\":\"BOOK\",\"condition\":\"GOOD\",\"imageIds\":[]}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.title").exists())
-                .andExpect(jsonPath("$.errors.imageIds").exists());
-
-        mvc.perform(get("/api/items/999999")).andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("ITEM_NOT_FOUND"));
-
-        mvc.perform(delete("/api/items/" + itemId).header("Authorization", a.bearer()))
-                .andExpect(status().isNoContent());
-        mvc.perform(get("/api/items/" + itemId)).andExpect(status().isNotFound());
-    }
+    @Autowired
+    com.sbada.events.OutboxRepository outbox;
+    @Autowired
+    com.sbada.events.MainEventHandler events;
 
     @Test
     void fullExchangeFlow() throws Exception {
@@ -142,22 +65,6 @@ class ItemExchangeFlowTest {
         long airpods = TestSupport.createItem(mvc, minji, "캠핑 텐트", "SPORTS", "NEW", "[\"HOBBY\"]");
         long lego = TestSupport.createItem(mvc, dohyun, "레고 테크닉", "HOBBY", "NEW", "[\"SPORTS\"]");
         long thirdItem = TestSupport.createItem(mvc, third, "닌텐도 게임칩", "HOBBY", "LIKE_NEW", "[]");
-
-        // 가격 매칭: 민지의 텐트 기준(0.5~2배 = 2만~8만원)으로 레고가 후보에 나오고 점수·근거가 있다
-        mvc.perform(get("/api/items/" + airpods + "/matches").header("Authorization", minji.bearer()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.algorithm").value("price-match-v1"))
-                .andExpect(jsonPath("$.matches[*].item.id", hasItem((int) lego)))
-                .andExpect(jsonPath("$.matches[0].score", greaterThan(0)))
-                .andExpect(jsonPath("$.matches[0].factors.length()").value(5));
-        // 남의 물건 매칭은 볼 수 없다
-        mvc.perform(get("/api/items/" + airpods + "/matches").header("Authorization", dohyun.bearer()))
-                .andExpect(status().isForbidden());
-
-        // 홈 피드
-        mvc.perform(get("/api/feed").header("Authorization", minji.bearer()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[*].item.id", hasItem((int) lego)));
 
         // 도현: 레고 → 에어팟 '바로 바꾸기'
         String created = mvc.perform(post("/api/exchanges").header("Authorization", dohyun.bearer())
@@ -206,15 +113,19 @@ class ItemExchangeFlowTest {
         // 요청을 보낸 사람은 수락할 수 없다(403) → 상태는 그대로
         mvc.perform(post("/api/exchanges/" + exchangeId + "/accept").header("Authorization", dohyun.bearer()))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("NOT_RECEIVER"));
-        mvc.perform(get("/api/items/" + airpods)).andExpect(jsonPath("$.status").value("AVAILABLE"));
+        assertThat(FakeServices.status(airpods)).isEqualTo("AVAILABLE"); // 물건 상태는 물품 서버(가짜)에
 
         // 민지가 수락 → 교환 성사
         mvc.perform(post("/api/exchanges/" + exchangeId + "/accept").header("Authorization", minji.bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACCEPTED"))
                 .andExpect(jsonPath("$.myRole").value("RECEIVER"));
-        mvc.perform(get("/api/items/" + airpods)).andExpect(jsonPath("$.status").value("TRADED"));
-        mvc.perform(get("/api/items/" + lego)).andExpect(jsonPath("$.status").value("TRADED"));
+        // 두 물건은 물품 서버가 배달부(gRPC CompleteTrade)로 거래 완료 처리
+        assertThat(FakeServices.status(airpods)).isEqualTo("TRADED");
+        assertThat(FakeServices.status(lego)).isEqualTo("TRADED");
+        // 허브(Kafka)로 알릴 교환 이벤트가 아웃박스에 남았다(물품 서버가 '교환 요청 수' 인기도에 씀)
+        assertThat(outbox.findAll()).anySatisfy(e -> assertThat(e.getPayload())
+                .contains("EXCHANGE_REQUESTED").contains("\"targetItemId\":" + airpods));
 
         // 같은 물건에 걸린 다른 요청은 자동 취소
         mvc.perform(get("/api/exchanges/" + otherId).header("Authorization", third.bearer()))
@@ -234,6 +145,40 @@ class ItemExchangeFlowTest {
         // 교환 성사로 선호도가 학습되었다(도현의 SPORTS 선호는 1.0 유지)
         mvc.perform(get("/api/me").header("Authorization", dohyun.bearer()))
                 .andExpect(jsonPath("$.preferences[*].category", hasItem("SPORTS")));
+    }
+
+    /** 물품 서버가 물건을 내리면(허브 이벤트 ITEM_STATUS_CHANGED) 걸린 대기 요청이 취소되고 상대에게 알림 — 같은 이벤트는 한 번만 */
+    @Test
+    void itemHiddenEventCancelsWaitingRequests() throws Exception {
+        TestSupport.Account owner = TestSupport.newAccount(mvc, "ho");
+        TestSupport.Account asker = TestSupport.newAccount(mvc, "ha");
+        long target = TestSupport.createItem(mvc, owner, "내릴 물건", "BOOK", "GOOD", "[]");
+        long mine = TestSupport.createItem(mvc, asker, "내 책", "BOOK", "GOOD", "[]");
+        String created = mvc.perform(post("/api/exchanges").header("Authorization", asker.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetItemId\":%d,\"offeredItemId\":%d}".formatted(target, mine)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        long exchangeId = ((Number) JsonPath.read(created, "$.id")).longValue();
+
+        String event = """
+                {"eventId":"hide-%d","type":"ITEM_STATUS_CHANGED","itemId":%d,"ownerId":%d,"title":"내릴 물건",
+                 "status":"HIDDEN","reason":"물건이 내려가서 교환 요청이 취소되었어요."}
+                """.formatted(target, target, owner.id());
+        assertThat(events.handle(event)).isTrue();
+        assertThat(events.handle(event)).isFalse();
+        mvc.perform(get("/api/exchanges/" + exchangeId).header("Authorization", asker.bearer()))
+                .andExpect(jsonPath("$.status").value("CANCELED"));
+        mvc.perform(get("/api/notifications").header("Authorization", asker.bearer()))
+                .andExpect(jsonPath("$.notifications[0].type").value("EXCHANGE_CANCELED"));
+
+        // 물품 서버가 맡긴 알림(찜 등)도 허브로 와서 알림함에 들어간다
+        assertThat(events.handle("""
+                {"eventId":"noti-%d","type":"NOTIFY","userId":%d,"notificationType":"ITEM_LIKED",
+                 "title":"누가 내 물건을 찜했어요","body":"찜 테스트","refType":"ITEM","refId":%d}
+                """.formatted(target, owner.id(), target))).isTrue();
+        mvc.perform(get("/api/notifications").header("Authorization", owner.bearer()))
+                .andExpect(jsonPath("$.notifications[0].type").value("ITEM_LIKED"))
+                .andExpect(jsonPath("$.notifications[0].refId").value(target));
     }
 
     @Test

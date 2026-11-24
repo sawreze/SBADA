@@ -2,6 +2,8 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.1.1'
 	id 'io.spring.dependency-management' version '1.1.7'
+	// 2026-11-25 MSA 2단계: 서비스끼리 gRPC('배달부')
+	id 'com.google.protobuf' version '0.9.6'
 }
 
 group = 'com.sbada'
@@ -25,6 +27,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 
+	// 2026-11-25 MSA 2단계: 배달부(gRPC) 서버 · 클라이언트 + 허브(Kafka)
+	implementation 'org.springframework.boot:spring-boot-starter-grpc-server'
+	implementation 'org.springframework.boot:spring-boot-starter-grpc-client'
+	implementation 'org.springframework.boot:spring-boot-starter-kafka'
+
 	// 메인 서버가 발급한 로그인 토큰(JWT)을 검증만 한다(발급은 하지 않음)
 	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
@@ -32,7 +39,23 @@ dependencies {
 	runtimeOnly 'com.h2database:h2:2.4.240'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.kafka:spring-kafka-test'
+	testImplementation 'io.grpc:grpc-inprocess'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+sourceSets {
+	main {
+		proto {
+			srcDir '../sbada-proto/proto'
+		}
+	}
+}
+
+protobuf {
+	plugins {
+		grpc {}
+	}
 }
 
 tasks.named('test') {
@@ -46,4 +69,29 @@ tasks.named('test') {
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.compilerArgs << '-parameters'
+}
+
+// ===== 2026-11-25 클라우드 컴파일용: 필요한 jar 를 미리 받아 두고 클래스패스 목록을 남긴다 =====
+//  ./gradlew prefetch → build/prefetch-cp.txt (비밀값 없음, jar 경로만)
+//  리눅스용 protoc · gRPC 플러그인도 함께 받아 둔다(클라우드에서 .proto → 자바 코드 생성)
+tasks.register('prefetch') {
+	doLast {
+		def names = ['compileClasspath', 'runtimeClasspath', 'testCompileClasspath', 'testRuntimeClasspath', 'annotationProcessor']
+		def files = new LinkedHashSet()
+		names.each { n -> def c = project.configurations.findByName(n); if (c != null) files.addAll(c.resolve()) }
+		def pv = project.dependencyManagement.importedProperties['protobuf-java.version']
+		def gv = project.dependencyManagement.importedProperties['grpc-java.version']
+		println "protobuf-java.version=${pv} grpc-java.version=${gv}"
+		if (pv != null && gv != null) {
+			def tools = project.configurations.detachedConfiguration(
+					project.dependencies.create("com.google.protobuf:protoc:${pv}:linux-x86_64@exe"),
+					project.dependencies.create("io.grpc:protoc-gen-grpc-java:${gv}:linux-x86_64@exe"))
+			tools.transitive = false
+			files.addAll(tools.resolve())
+		}
+		def out = project.layout.buildDirectory.file('prefetch-cp.txt').get().asFile
+		out.parentFile.mkdirs()
+		out.text = files.collect { it.absolutePath }.join('\n') + '\n'
+		println "PREFETCH_OK ${files.size()} files → ${out}"
+	}
 }

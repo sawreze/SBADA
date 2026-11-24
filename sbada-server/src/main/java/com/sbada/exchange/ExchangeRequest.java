@@ -3,7 +3,6 @@ package com.sbada.exchange;
 import java.time.Instant;
 
 import com.sbada.common.ApiException;
-import com.sbada.item.Item;
 import com.sbada.user.AppUser;
 
 import jakarta.persistence.Column;
@@ -27,7 +26,7 @@ import lombok.NoArgsConstructor;
  * 요청을 받은 사람(targetOwner)이 수락해야만 교환이 성사된다.
  *
  * [프로그래밍 설명 — 상태를 가진 엔티티]
- *  - 한 요청에 사람 2명(@ManyToOne AppUser 두 개)과 물건 2개(@ManyToOne Item 두 개)가 연결된다.
+ *  - 한 요청에 사람 2명(@ManyToOne AppUser 두 개)과 물건 2개(물품 서버의 물건 번호 두 개)가 연결된다.
  *    같은 엔티티 타입을 두 번 참조하므로 @JoinColumn 으로 외래 키 열 이름을 각각 정했다.
  *  - 상태 변경은 accept()/reject()/cancel() 메서드로만 하고, 모두 close() 를 거친다.
  *    close() 가 'REQUESTED 일 때만 바꿀 수 있다'는 규칙을 한 곳에서 지켜서, 어디서 부르든 규칙이 깨지지 않는다
@@ -58,15 +57,14 @@ public class ExchangeRequest {
     @JoinColumn(name = "target_owner_id")
     private AppUser targetOwner;
 
-    /** 보낸 사람이 내놓는 물건 */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "offered_item_id")
-    private Item offeredItem;
+    // 2026-11-25 MSA 2단계: 물건은 물품 서버 DB 에 있다 → 번호만 들고, 화면에 필요한 정보는 배달부(gRPC)로 받는다
+    /** 보낸 사람이 내놓는 물건 번호 */
+    @Column(name = "offered_item_id", nullable = false)
+    private Long offeredItemId;
 
-    /** 보낸 사람이 원하는 물건 */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "target_item_id")
-    private Item targetItem;
+    /** 보낸 사람이 원하는 물건 번호 */
+    @Column(name = "target_item_id", nullable = false)
+    private Long targetItemId;
 
     @Column(length = 200)
     private String message;
@@ -108,11 +106,12 @@ public class ExchangeRequest {
     @Column(name = "owner_received_at")
     private Instant ownerReceivedAt;
 
-    public ExchangeRequest(AppUser requester, Item offeredItem, Item targetItem, String message) {
+    public ExchangeRequest(AppUser requester, AppUser targetOwner, long offeredItemId, long targetItemId,
+                           String message) {
         this.requester = requester;
-        this.targetOwner = targetItem.getOwner(); // 받는 사람은 원하는 물건의 주인으로 자동 결정
-        this.offeredItem = offeredItem;
-        this.targetItem = targetItem;
+        this.targetOwner = targetOwner; // 받는 사람 = 원하는 물건의 주인(물품 서버가 알려 준 ownerId)
+        this.offeredItemId = offeredItemId;
+        this.targetItemId = targetItemId;
         this.message = message;
         this.status = ExchangeStatus.REQUESTED;   // 새 요청은 항상 '대기' 상태에서 시작
         this.createdAt = Instant.now();

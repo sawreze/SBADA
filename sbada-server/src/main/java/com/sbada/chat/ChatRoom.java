@@ -3,7 +3,6 @@ package com.sbada.chat;
 import java.time.Instant;
 
 import com.sbada.common.ApiException;
-import com.sbada.item.Item;
 import com.sbada.user.AppUser;
 
 import jakarta.persistence.Column;
@@ -39,9 +38,9 @@ public class ChatRoom {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "item_id")
-    private Item item;
+    /** 어떤 물건 이야기인지(물품 서버의 물건 번호, 2026-11-25 MSA 2단계) */
+    @Column(name = "item_id", nullable = false)
+    private Long itemId;
 
     /** 물건 주인 */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -65,9 +64,9 @@ public class ChatRoom {
     private long ownerLastReadId;
     private long partnerLastReadId;
 
-    public ChatRoom(Item item, AppUser partner) {
-        this.item = item;
-        this.owner = item.getOwner();
+    public ChatRoom(long itemId, AppUser owner, AppUser partner) {
+        this.itemId = itemId;
+        this.owner = owner;
         this.partner = partner;
         this.createdAt = Instant.now();
         this.lastMessageAt = this.createdAt;

@@ -1,0 +1,51 @@
+// 회원 서비스(메인 서버 :9097)가 제공한다. 물품 서버가 목록 · 추천을 만들 때 부른다.
+syntax = "proto3";
+
+package sbada.user.v1;
+
+option java_multiple_files = true;
+option java_package = "com.sbada.grpc.user.v1";
+
+service UserService {
+  // 여러 회원을 한 번에(GraphQL 목록의 '주인' 칸을 한 번의 호출로 채운다 = N+1 방지)
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
+  // 추천 점수에 필요한 것: 내 키워드 · 내 취향, 후보 주인들의 취향, 이미 보낸 교환 요청
+  rpc GetRecommendContext(RecommendContextRequest) returns (RecommendContext);
+}
+
+message GetUsersRequest {
+  repeated int64 ids = 1;
+}
+
+message User {
+  int64 id = 1;
+  string nickname = 2;
+  string region = 3;
+  string second_region = 4;
+  int64 profile_image_id = 5; // 0 = 없음
+}
+
+message GetUsersResponse {
+  repeated User users = 1;
+}
+
+message RecommendContextRequest {
+  int64 user_id = 1;
+  repeated int64 owner_ids = 2;
+  int64 involving_item_id = 3; // 0 이 아니면: 이 물건과 얽힌 '대기 중' 교환 요청의 상대 물건을 함께 돌려준다
+}
+
+message CategoryWeights {
+  map<string, double> weights = 1; // 카테고리 코드 → 가중치
+}
+
+message RecommendContext {
+  bool user_found = 1;
+  repeated string keywords = 2;
+  CategoryWeights my_weights = 3;
+  map<int64, CategoryWeights> owner_weights = 4;
+  repeated int64 requested_target_item_ids = 5; // 내가 보낸 대기 중 요청의 상대 물건
+  map<int64, string> involving_item_status = 6; // involving_item_id 와 얽힌 대기 요청의 상대 물건 → 상태
+  optional int32 price_min = 7; // 온보딩에서 고른 가격대(없으면 비어 있음)
+  optional int32 price_max = 8;
+}

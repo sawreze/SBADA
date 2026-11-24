@@ -1,0 +1,69 @@
+// 물품 서비스(물품 서버 :9099)가 제공한다. 메인 서버(교환 · 채팅)가 부른다.
+syntax = "proto3";
+
+package sbada.item.v1;
+
+option java_multiple_files = true;
+option java_package = "com.sbada.grpc.item.v1";
+
+service ItemService {
+  // 교환 · 채팅 화면에 보여 줄 물건 요약(여러 개 한 번에). 없는 번호는 빠진다
+  rpc GetItems(GetItemsRequest) returns (GetItemsResponse);
+  // 교환 성사: 두 물건이 모두 교환 가능하면 한 번에 거래 완료(TRADED)로. 하나라도 안 되면 아무것도 안 바꾼다
+  rpc CompleteTrade(CompleteTradeRequest) returns (CompleteTradeResponse);
+  // 상태 확인 화면용 물건 수
+  rpc CountItems(CountItemsRequest) returns (CountItemsResponse);
+  // 사진 확인(프로필 사진으로 고를 때 '내가 올린 사진인지')
+  rpc GetImage(GetImageRequest) returns (ImageInfo);
+}
+
+message GetItemsRequest {
+  repeated int64 ids = 1;
+}
+
+message ItemInfo {
+  int64 id = 1;
+  int64 owner_id = 2;
+  string title = 3;
+  int32 price = 4;
+  string status = 5;         // AVAILABLE · TRADED · HIDDEN · HELD
+  string category = 6;
+  string category_label = 7;
+  string image_url = 8;      // 대표 사진, 없으면 빈 문자열
+  string condition = 9;
+}
+
+message GetItemsResponse {
+  repeated ItemInfo items = 1;
+}
+
+message CompleteTradeRequest {
+  int64 exchange_id = 1;
+  repeated int64 item_ids = 2;
+}
+
+message CompleteTradeResponse {
+  bool ok = 1;
+  string code = 2;    // 실패 이유 코드(ITEM_NOT_AVAILABLE 등)
+  string message = 3;
+}
+
+message CountItemsRequest {
+}
+
+message CountItemsResponse {
+  int64 total = 1;
+  int64 available = 2;
+}
+
+message GetImageRequest {
+  int64 image_id = 1;
+}
+
+message ImageInfo {
+  bool found = 1;
+  int64 id = 2;
+  int64 uploader_id = 3;
+  string url = 4;
+  int64 item_id = 5; // 0 = 아직 물건에 안 쓰임
+}

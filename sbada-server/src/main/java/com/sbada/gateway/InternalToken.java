@@ -21,6 +21,8 @@ import com.sbada.common.ApiException;
 public class InternalToken {
 
     public static final String HEADER = "X-Internal-Token";
+    /** gRPC 메타데이터 이름(소문자) — 배달부 호출마다 붙인다 (2026-11-25 MSA 2단계) */
+    public static final String GRPC_KEY = "x-internal-token";
 
     private final byte[] expected;
 
@@ -31,6 +33,11 @@ public class InternalToken {
 
     public String value() {
         return new String(expected, StandardCharsets.US_ASCII);
+    }
+
+    /** gRPC 서버 인터셉터용: 맞으면 true */
+    public boolean matches(String given) {
+        return given != null && MessageDigest.isEqual(expected, given.trim().getBytes(StandardCharsets.US_ASCII));
     }
 
     public void check(String given) {

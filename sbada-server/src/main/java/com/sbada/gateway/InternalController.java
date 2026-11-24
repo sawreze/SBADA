@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.sbada.common.ApiException;
 import com.sbada.common.ErrorResponse;
+import com.sbada.events.MainEventHandler;
 import com.sbada.exchange.ExchangeService;
 import com.sbada.notification.NotificationService;
 import com.sbada.notification.NotificationType;
@@ -34,23 +35,28 @@ import com.sbada.user.AppUserRepository;
 @RequestMapping("/internal")
 public class InternalController {
 
-    private static final Set<String> WALLET_EVENTS =
-            Set.of("WITHDRAWN", "CHARGED", "PAYMENT_SENT", "PAYMENT_RECEIVED",
-                    "ESCROW_HELD", "ESCROW_RELEASED", "ESCROW_REFUNDED", "ACCOUNT_VERIFY_SENT");
+    private static final Set<String> WALLET_EVENTS = MainEventHandler.WALLET_EVENTS;
 
     private final InternalToken token;
     private final AppUserRepository users;
-    private final NotificationService notifications;
-    private final ProcessedEventRepository processed;
     private final ExchangeService exchanges;
+    private final MainEventHandler events;
+    private final LegacyExport legacy;
 
-    public InternalController(InternalToken token, AppUserRepository users, NotificationService notifications,
-                              ProcessedEventRepository processed, ExchangeService exchanges) {
+    public InternalController(InternalToken token, AppUserRepository users, ExchangeService exchanges,
+                              MainEventHandler events, LegacyExport legacy) {
         this.token = token;
         this.users = users;
-        this.notifications = notifications;
-        this.processed = processed;
         this.exchanges = exchanges;
+        this.events = events;
+        this.legacy = legacy;
+    }
+
+    /** 물품 서버가 처음 켜질 때 한 번: 옛 물건 · 사진 · 찜 · AI 분석 · 판매자를 가져간다(MSA 2단계 데이터 이전) */
+    @GetMapping("/legacy/items-export")
+    public Map<String, Object> legacyItems(@RequestHeader(value = InternalToken.HEADER, required = false) String given) {
+        token.check(given);
+        return legacy.export();
     }
 
     @GetMapping("/exchanges/{id}")
@@ -82,20 +88,8 @@ public class InternalController {
                 || !(e.get("userId") instanceof Number)) {
             throw ApiException.badRequest("INVALID_EVENT", "이벤트 형식이 올바르지 않습니다.");
         }
-        if (processed.existsById(eventId)) {
-            return Map.of("status", "duplicate"); // 이미 처리함 → 결제 서비스는 '보냄'으로 표시하고 끝
-        }
-        processed.save(new ProcessedEvent(eventId, type));
-        long userId = ((Number) e.get("userId")).longValue();
-        if (users.existsById(userId)) {
-            Long refId = e.get("refId") instanceof Number n ? n.longValue() : null;
-            notifications.notify(userId, NotificationType.WALLET, limit(text(e.get("title")), 60),
-                    limit(text(e.get("body")), 200), "wallet", refId);
-        }
-        if (e.get("exchangeId") instanceof Number exchangeId) { // 안전결제 이벤트 → 교환 화면의 결제 상태
-            exchanges.applyPaymentEvent(exchangeId.longValue(), type);
-        }
-        return Map.of("status", "ok");
+        // 2026-11-25: Kafka 로 오는 결제 이벤트와 같은 처리(MainEventHandler). 이미 처리한 이벤트면 duplicate
+        return Map.of("status", events.apply(e) ? "ok" : "duplicate");
     }
 
     private static String text(Object o) {

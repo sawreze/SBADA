@@ -1,0 +1,27 @@
+// 교환 서비스(메인 서버 :9097)가 제공한다. 결제 서버가 안전결제 전에 조건을 확인할 때 부른다.
+syntax = "proto3";
+
+package sbada.exchange.v1;
+
+option java_multiple_files = true;
+option java_package = "com.sbada.grpc.exchange.v1";
+
+service ExchangeService {
+  rpc GetExchange(GetExchangeRequest) returns (ExchangeInfo);
+}
+
+message GetExchangeRequest {
+  int64 exchange_id = 1;
+}
+
+message ExchangeInfo {
+  bool found = 1;
+  int64 id = 2;
+  string status = 3;         // REQUESTED · ACCEPTED · REJECTED · CANCELED
+  int64 extra_amount = 4;    // 0 = 추가 금액 없음
+  int64 payer_id = 5;        // 0 = 없음
+  int64 payee_id = 6;        // 0 = 없음
+  string payment_status = 7; // NONE · PAID_HELD · RELEASED · REFUND_PENDING · REFUNDED
+  int64 requester_id = 8;
+  int64 owner_id = 9;
+}

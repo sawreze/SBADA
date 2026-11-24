@@ -2,7 +2,7 @@ package com.sbada.exchange;
 
 import java.util.List;
 
-import com.sbada.item.ItemDtos;
+import com.sbada.items.ItemRef;
 import com.sbada.user.UserDtos;
 
 import jakarta.validation.constraints.Max;
@@ -53,21 +53,28 @@ public final class ExchangeDtos {
      */
     public record ExchangeView(long id, String status, String message,
                                UserDtos.PublicUser requester, UserDtos.PublicUser targetOwner,
-                               ItemDtos.ItemSummary offeredItem, ItemDtos.ItemSummary targetItem,
+                               ItemRef.ItemSummary offeredItem, ItemRef.ItemSummary targetItem,
                                int priceDiffPercent, Long chatRoomId, String closeReason,
                                String createdAt, String respondedAt, String myRole,
                                long extraAmount, Long extraPayerId, String extraDirection, String paymentStatus,
                                boolean iReceived, boolean otherReceived) {
-        public static ExchangeView from(ExchangeRequest e, Long viewerId) {
-            int target = Math.max(1, e.getTargetItem().getPrice()); // 0으로 나누기 방지
+        /**
+         * items: 물품 서버에서 받은 물건 요약(번호 → 요약). 없으면(물품 서버가 꺼짐 등) '불러오지 못했어요'로 채운다.
+         * 2026-11-25 MSA 2단계: 물건은 메인 DB 에 없으므로 부르는 쪽(ExchangeService)이 배달부로 한 번에 받아 넘긴다.
+         */
+        public static ExchangeView from(ExchangeRequest e, Long viewerId, java.util.Map<Long, ItemRef> items) {
+            ItemRef offeredRef = items.getOrDefault(e.getOfferedItemId(), ItemRef.unknown(e.getOfferedItemId()));
+            ItemRef targetRef = items.getOrDefault(e.getTargetItemId(), ItemRef.unknown(e.getTargetItemId()));
+            int target = Math.max(1, targetRef.price()); // 0으로 나누기 방지
             // 100.0 으로 곱해 실수 나눗셈을 한 뒤 반올림 → (int) 로 정수 변환
-            int diff = (int) Math.round((e.getOfferedItem().getPrice() - target) * 100.0 / target);
+            int diff = targetRef.price() == 0 || offeredRef.price() == 0 ? 0
+                    : (int) Math.round((offeredRef.price() - target) * 100.0 / target);
             // 중첩 삼항 연산자: 보는 사람이 없으면 null, 보낸 사람이면 REQUESTER, 받은 사람이면 RECEIVER
             String role = viewerId == null ? null
                     : e.isRequestedBy(viewerId) ? "REQUESTER" : e.isReceivedBy(viewerId) ? "RECEIVER" : null;
             return new ExchangeView(e.getId(), e.getStatus().name(), e.getMessage(),
                     UserDtos.PublicUser.from(e.getRequester()), UserDtos.PublicUser.from(e.getTargetOwner()),
-                    ItemDtos.ItemSummary.from(e.getOfferedItem()), ItemDtos.ItemSummary.from(e.getTargetItem()),
+                    offeredRef.summary(), targetRef.summary(),
                     diff, e.getChatRoomId(), e.getCloseReason(), e.getCreatedAt().toString(),
                     e.getRespondedAt() == null ? null : e.getRespondedAt().toString(), role,
                     e.getExtraAmount(), e.payerId(), direction(e, viewerId), e.getPaymentStatus(),

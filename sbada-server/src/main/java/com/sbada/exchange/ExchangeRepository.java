@@ -21,7 +21,7 @@ public interface ExchangeRepository extends JpaRepository<ExchangeRequest, Long>
     /** 이 두 물건(내놓은 → 원하는) 조합으로 이 상태의 요청이 있는가 */
     @Query("""
             select count(e) > 0 from ExchangeRequest e
-            where e.offeredItem.id = :offeredId and e.targetItem.id = :targetId and e.status = :status
+            where e.offeredItemId = :offeredId and e.targetItemId = :targetId and e.status = :status
             """)
     boolean existsBetween(@Param("offeredId") long offeredId, @Param("targetId") long targetId,
                           @Param("status") ExchangeStatus status);
@@ -29,7 +29,7 @@ public interface ExchangeRepository extends JpaRepository<ExchangeRequest, Long>
     /** 이 물건들이 어느 쪽으로든 걸려 있는, 이 상태의 요청들 */
     @Query("""
             select e from ExchangeRequest e
-            where e.status = :status and (e.offeredItem.id in :itemIds or e.targetItem.id in :itemIds)
+            where e.status = :status and (e.offeredItemId in :itemIds or e.targetItemId in :itemIds)
             """)
     List<ExchangeRequest> findInvolving(@Param("itemIds") Collection<Long> itemIds,
                                         @Param("status") ExchangeStatus status);
