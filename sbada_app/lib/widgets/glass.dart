@@ -219,7 +219,7 @@ class GlassTabBar extends StatelessWidget {
           : DecoratedBox(
               key: const ValueKey('tab-bar-white'),
               decoration: BoxDecoration(
-                color: Sb.base,
+                color: Sb.card, // 바탕(base)은 따뜻한 흰색이 됐으므로 탭바는 카드색(순백)
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(color: Sb.line, width: 0.8),
                 boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 16, offset: Offset(0, 4))],
