@@ -50,9 +50,12 @@ class FlywayMigrationTest {
     @Test
     void migrationsCreateSchemaAndDemoData() {
         Integer applied = jdbc.queryForObject(
-                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19')",
+                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20')",
                 Integer.class);
-        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(19);
+        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(20);
+        // V20: 기존 계정은 아이디@sbada.test 이메일을 받는다(admin@sbada.test 로 로그인)
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "select email from app_users where username = 'admin'", String.class)).isEqualTo("admin@sbada.test");
         // V2 시연 계정 4명 + V9 전국 판매자 135명 + V11 서울 판매자 50명 + V12 admin
         org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("select count(*) from app_users", Integer.class))
                 .isEqualTo(190);
@@ -102,6 +105,11 @@ class FlywayMigrationTest {
                 .andExpect(jsonPath("$.user.onboarded").value(true))
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         String bearer = "Bearer " + JsonPath.read(login, "$.accessToken");
+        // V20: 같은 시연 계정을 이메일(아이디@sbada.test)로도 로그인할 수 있다
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"admin@sbada.test\",\"password\":\"sbada1234\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.username").value("admin"));
 
         // 민지는 도현에게서 받은 교환 요청 1건과 안 읽은 알림 1개로 시작한다
         mvc.perform(get("/api/exchanges").param("box", "received").header("Authorization", bearer))

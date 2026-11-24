@@ -31,4 +31,19 @@ void main() {
     const same = TextEditingValue(text: 'junho', selection: TextSelection.collapsed(offset: 5));
     expect(f.formatEditUpdate(TextEditingValue.empty, same), same);
   });
+
+  // 2026-11-25 이메일 로그인: @ . 은 그대로 두고 한글은 자판 위치대로
+  test('이메일 칸: 한글로 쳐도 영문 이메일이 되고, @ . _ + - 는 남는다', () {
+    expect(toEmailText('ㅁ으ㅑㅜ@ㄴㅠㅁㅇㅁ.ㅅㄷㄴㅅ'), 'admin@sbada.test');
+    expect(toEmailText('Tester1 @SBADA.test'), 'tester1@sbada.test');
+    expect(toEmailText('a.b+c_d-e@x.io'), 'a.b+c_d-e@x.io');
+    expect(isEmail('tester1@sbada.test'), isTrue);
+    expect(isEmail('tester1'), isFalse);
+    expect(isEmail('a@b'), isFalse);
+    const f = IdInputFormatter.email();
+    final out = f.formatEditUpdate(TextEditingValue.empty,
+        const TextEditingValue(text: 'ㅁ@', selection: TextSelection.collapsed(offset: 2)));
+    expect(out.text, 'a@');
+    expect(out.selection.extentOffset, 2);
+  });
 }

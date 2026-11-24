@@ -10,10 +10,11 @@ class AuthRepository {
 
   /// [remember] = 로그인 화면 '로그인 유지'. true 면 서버가 30일 토큰을 주고 기기에 저장(앱을 다시 켜도 로그인 상태),
   /// false 면 2시간 토큰을 메모리에만 둔다(앱을 끄면 다시 로그인).
-  Future<AppUser> login(String username, String password, {bool remember = true}) async {
+  /// 2026-11-25: 이메일 로그인. 서버는 '@' 가 없으면 예전 아이디로 찾아서 시연 계정(admin 등)도 그대로 된다
+  Future<AppUser> login(String email, String password, {bool remember = true}) async {
     final json = await api.post('/api/auth/login',
         auth: false,
-        body: {'username': username.trim(), 'password': password, 'rememberMe': remember}) as Map<String, dynamic>;
+        body: {'email': email.trim(), 'password': password, 'rememberMe': remember}) as Map<String, dynamic>;
     final user = AppUser.fromJson(json['user'] as Map<String, dynamic>);
     await session.signIn(json['accessToken'] as String, user, persist: remember);
     return user;
@@ -29,19 +30,20 @@ class AuthRepository {
     return user;
   }
 
+  /// 이메일로 가입(2026-11-25). 아이디(@핸들)는 서버가 이메일 앞부분으로 만들어 준다
   Future<AppUser> signup({
-    required String username,
+    required String email,
     required String password,
     required String nickname,
     String? region,
   }) async {
     await api.post('/api/auth/signup', auth: false, body: {
-      'username': username.trim(),
+      'email': email.trim().toLowerCase(),
       'password': password,
       'nickname': nickname.trim(),
       'region': region == null || region.trim().isEmpty ? null : region.trim(),
     });
-    return login(username, password);
+    return login(email, password);
   }
 
   Future<MeProfile> me() async {

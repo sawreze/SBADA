@@ -9,6 +9,7 @@ class AppUser {
     required this.onboarded,
     this.profileImageUrl,
     this.secondRegion,
+    this.email,
   });
 
   final int id;
@@ -23,6 +24,9 @@ class AppUser {
   /// 하나 더 추가한 동네(내 동네는 최대 2개). 없으면 null. 홈 왼쪽 위 동네 이름을 눌러 region 과 바꾼다.
   final String? secondRegion;
 
+  /// 로그인 이메일(2026-11-25 이메일 로그인). 카카오로 가입한 계정은 null
+  final String? email;
+
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
         id: reqInt(j, 'id'),
         username: reqStr(j, 'username'),
@@ -31,6 +35,7 @@ class AppUser {
         onboarded: optBool(j, 'onboarded'),
         profileImageUrl: optStr(j, 'profileImageUrl'),
         secondRegion: optStr(j, 'secondRegion'),
+        email: optStr(j, 'email'),
       );
 
   Map<String, dynamic> toJson() => {
@@ -41,6 +46,7 @@ class AppUser {
         'onboarded': onboarded,
         'profileImageUrl': profileImageUrl,
         'secondRegion': secondRegion,
+        'email': email,
       };
 }
 

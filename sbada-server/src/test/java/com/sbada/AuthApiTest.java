@@ -59,6 +59,49 @@ class AuthApiTest {
                 .andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
     }
 
+    // 2026-11-25 사용자 요청: 이메일로 가입 · 로그인(아이디는 이메일 앞부분으로 자동)
+    @Test
+    void emailSignupAndLogin() throws Exception {
+        mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"Mail.User-7@Example.com\",\"password\":\"study-1234\",\"nickname\":\"메일가입\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("mail.user-7@example.com"))
+                .andExpect(jsonPath("$.username").value("mailuser7"));
+        // 같은 이메일(대소문자만 다름) → 409
+        mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"mail.user-7@example.COM\",\"password\":\"study-1234\",\"nickname\":\"두번째\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EMAIL_EXISTS"))
+                .andExpect(jsonPath("$.errors.email").exists());
+        // 이메일로 로그인(대소문자 무시)
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"MAIL.user-7@example.com\",\"password\":\"study-1234\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.email").value("mail.user-7@example.com"));
+        // 틀린 비밀번호 → 401 (안내는 이메일 기준)
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"mail.user-7@example.com\",\"password\":\"wrong-pass\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
+        // 이메일 형식이 아니면 400 + errors.email
+        mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"not-an-email\",\"password\":\"study-1234\",\"nickname\":\"형식\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email").exists());
+        // 이메일도 아이디도 없으면 400
+        mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"study-1234\",\"nickname\":\"없음\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email").exists());
+        // 앞부분이 짧거나 이미 있는 아이디면 자동으로 바꿔 준다: ab@… → abuser, 한 번 더 → abuser_2
+        mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"ab@x.io\",\"password\":\"study-1234\",\"nickname\":\"짧은\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.username").value("abuser"));
+        mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"ab@y.io\",\"password\":\"study-1234\",\"nickname\":\"짧은둘\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.username").value("abuser_2"));
+    }
+
     @Test
     void invalidSignupInputIs400WithFieldErrors() throws Exception {
         mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON)

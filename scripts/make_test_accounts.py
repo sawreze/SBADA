@@ -1,7 +1,8 @@
 """직접 손으로 확인하는 테스트 계정 만들기 (2026-11-25 사용자 요청, 파이썬 표준 라이브러리만)
 
 켜져 있는 서버(메인 8097 → 물품 8099 · 결제 8098)에 실제 API 로 계정 3개와 물건을 만든다.
-  tester1 · tester2 · tester3  /  비밀번호 sbada1234  (다른 시연 계정과 같은 로컬 전용 공개 비밀번호)
+  tester1@sbada.test · tester2@sbada.test · tester3@sbada.test  /  비밀번호 sbada1234
+  (2026-11-25 이메일 로그인. 다른 시연 계정과 같은 로컬 전용 공개 비밀번호, .test 는 실제로 안 쓰이는 예약 도메인)
   - 셋 다 '서울 강남구 역삼동' → 서로 동네지도 · AI 추천에 보인다
   - admin 과 달리 '바로 성사' 가 아니다 → 요청 · 수락 · 결제 · 수령 확인을 내 손으로 끝까지 해 볼 수 있다
   - 온보딩(관심 카테고리)도 미리 끝내 둔다 → 로그인하면 바로 홈
@@ -84,14 +85,19 @@ def png(rgb):
 
 
 def login_or_signup(username, nickname):
+    email = f"{username}@sbada.test"
+    s, d = api("POST", "/api/auth/login", body={"email": email, "password": PASSWORD, "rememberMe": True})
+    if s == 200:
+        return d["accessToken"], d["user"]["id"], False
+    # 이메일 로그인이 생기기 전에 아이디로만 만든 계정이면 아이디로 로그인(V20 이 아이디@sbada.test 를 채워 줌)
     s, d = api("POST", "/api/auth/login", body={"username": username, "password": PASSWORD, "rememberMe": True})
     if s == 200:
         return d["accessToken"], d["user"]["id"], False
     s, d = api("POST", "/api/auth/signup",
-               body={"username": username, "password": PASSWORD, "nickname": nickname, "region": REGION})
+               body={"email": email, "username": username, "password": PASSWORD, "nickname": nickname, "region": REGION})
     if s != 201:
-        sys.exit(f"{username} 가입 실패({s}): {d.get('message', d)}")
-    s, d = api("POST", "/api/auth/login", body={"username": username, "password": PASSWORD, "rememberMe": True})
+        sys.exit(f"{email} 가입 실패({s}): {d.get('message', d)}")
+    s, d = api("POST", "/api/auth/login", body={"email": email, "password": PASSWORD, "rememberMe": True})
     if s != 200:
         sys.exit(f"{username} 로그인 실패({s}): {d.get('message', d)}")
     return d["accessToken"], d["user"]["id"], True
@@ -131,7 +137,7 @@ def main():
 
     for username, nickname, wanted, items in ACCOUNTS:
         token, uid, created = login_or_signup(username, nickname)
-        print(f"\n■ {username} ({nickname}, id {uid}) — {'새로 가입' if created else '이미 있음'}")
+        print(f"\n■ {username}@sbada.test ({nickname}, id {uid}) — {'새로 가입' if created else '이미 있음'}")
         # 동네 · 관심 카테고리(온보딩 완료 처리)
         api("PUT", "/api/me/region", token, {"region": REGION})
         s, _ = api("PUT", "/api/me/preferences", token, {"wantedCategories": wanted, "keywords": [], "priceMin": None, "priceMax": None})
@@ -160,7 +166,7 @@ def main():
             it = new_item(token, title, cat, cond, wish, rgb)
             print(f"  + #{it['id']} {it['title']} — AI 가격 {it.get('price', 0):,}원")
 
-    print("\n완료! 시뮬레이터에서 tester1 / tester2 / tester3 (비밀번호 sbada1234) 로 로그인해 확인하세요.")
+    print("\n완료! 시뮬레이터에서 tester1@sbada.test / tester2@sbada.test / tester3@sbada.test (비밀번호 sbada1234) 로 로그인해 확인하세요.")
     print("확인 순서: docs/handoff/09_직접_확인_체크리스트.md")
 
 

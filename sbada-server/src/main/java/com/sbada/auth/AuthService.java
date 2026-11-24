@@ -1,6 +1,7 @@
 package com.sbada.auth;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -68,16 +69,28 @@ public class AuthService {
             // BCrypt는 72바이트까지만 비교하므로 넘으면 거절한다(7장 6.1)
             throw ApiException.badRequest("PASSWORD_TOO_LONG", "비밀번호가 너무 깁니다(UTF-8 72바이트 이하).");
         }
-        // ② 중복 아이디 → 409 Conflict (자원의 현재 상태와 충돌). existsByUsername 은 메서드 이름으로 만든 쿼리:
+        // ② 2026-11-25 이메일 가입: 이메일 중복 → 409. 아이디를 안 보냈으면 이메일 앞부분으로 자동으로 만든다
+        String email = input.email() == null || input.email().isBlank() ? null : input.email().trim().toLowerCase(Locale.ROOT);
+        String username = input.username() == null || input.username().isBlank() ? null : input.username().trim();
+        if (email == null && username == null) {
+            throw new ApiException(400, "VALIDATION_FAILED", "이메일을 입력해 주세요.", java.util.Map.of("email", "이메일을 입력해 주세요."));
+        }
+        if (email != null && users.existsByEmail(email)) {
+            throw new ApiException(409, "EMAIL_EXISTS", "이미 가입된 이메일입니다.", java.util.Map.of("email", "이미 가입된 이메일입니다."));
+        }
+        // 중복 아이디 → 409 Conflict (자원의 현재 상태와 충돌). existsByUsername 은 메서드 이름으로 만든 쿼리:
         //    SELECT count(*) > 0 FROM app_users WHERE username = ?
-        if (users.existsByUsername(input.username())) {
+        if (username == null) {
+            username = usernameFromEmail(email);
+        } else if (users.existsByUsername(username)) {
             throw ApiException.conflict("USERNAME_EXISTS", "이미 사용 중인 아이디입니다.");
         }
         // ③ 동네를 비워 보내면 기본값 "서울" (삼항 연산자: 조건 ? 참일 때 : 거짓일 때)
         String region = input.region() == null || input.region().isBlank() ? "서울" : input.region().trim();
         // ④ 엔티티 생성 → save() 가 INSERT 를 실행하고, DB 가 만든 id 가 채워진 엔티티를 돌려준다
-        AppUser user = users.save(new AppUser(input.username(),
-                passwordEncoder.encode(input.password()), input.nickname().trim(), region));
+        AppUser created = new AppUser(username, passwordEncoder.encode(input.password()), input.nickname().trim(), region);
+        created.assignEmail(email);
+        AppUser user = users.save(created);
         // ⑤ 엔티티를 응답용 DTO 로 바꿔 돌려준다(passwordHash 는 DTO 에 없음)
         return UserDtos.UserView.from(user);
     }
@@ -88,12 +101,17 @@ public class AuthService {
      */
     @Transactional(readOnly = true)
     public AuthDtos.LoginResponse login(AuthDtos.LoginRequest input) {
-        // findByUsername 은 Optional<AppUser> 를 돌려준다. orElse(null) = 없으면 null
-        AppUser user = users.findByUsername(input.username().trim()).orElse(null);
-        // 아이디가 없는 경우와 비밀번호가 틀린 경우를 같은 안내로 처리한다
+        // 2026-11-25: 이메일 로그인. '@' 가 있으면 이메일로, 없으면 예전 아이디로 찾는다(시연 계정 admin 등)
+        String id = input.identifier();
+        if (id.isEmpty()) {
+            throw new ApiException(400, "VALIDATION_FAILED", "이메일을 입력해 주세요.", java.util.Map.of("email", "이메일을 입력해 주세요."));
+        }
+        // findBy… 는 Optional<AppUser> 를 돌려준다. orElse(null) = 없으면 null
+        AppUser user = (id.contains("@") ? users.findByEmail(id.toLowerCase(Locale.ROOT)) : users.findByUsername(id)).orElse(null);
+        // 계정이 없는 경우와 비밀번호가 틀린 경우를 같은 안내로 처리한다
         // passwordEncoder.matches(원문, 저장된 해시): 원문을 같은 솔트로 해시해 비교한다(해시를 되돌리는 게 아님)
         if (user == null || !passwordEncoder.matches(input.password(), user.getPasswordHash())) {
-            throw new ApiException(401, "LOGIN_FAILED", "아이디 또는 비밀번호가 올바르지 않습니다.");
+            throw new ApiException(401, "LOGIN_FAILED", "이메일 또는 비밀번호가 올바르지 않습니다.");
         }
         // 토큰 안에는 사용자 번호(sub)만 들어간다 → 이후 요청에서 '누구인지'를 이 번호로 안다
         return issue(user, input.remember());
@@ -121,6 +139,24 @@ public class AuthService {
     /** 카카오 계정의 스바다 아이디: kakao_회원번호 (이미 있으면 뒤에 _2, _3 …). 아이디 칸은 20자까지 */
     private String uniqueUsername(long kakaoId) {
         String base = cut("kakao_" + kakaoId, 20);
+        String name = base;
+        for (int i = 2; users.existsByUsername(name); i++) {
+            String suffix = "_" + i;
+            name = cut(base, 20 - suffix.length()) + suffix;
+        }
+        return name;
+    }
+
+    /**
+     * 이메일 가입의 내부 아이디(@핸들): 이메일 앞부분을 영문 소문자 · 숫자 · 밑줄만 남겨 4~16자로.
+     * 이미 있으면 뒤에 _2, _3 … (아이디 칸은 20자까지). 예: Min.Ji-98@gmail.com → minji98
+     */
+    String usernameFromEmail(String email) {
+        String local = email.substring(0, email.indexOf('@')).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "");
+        if (local.length() < 4) {
+            local = local + "user"; // 너무 짧으면(예: ab@…) 뒤에 user 를 붙인다 → abuser
+        }
+        String base = cut(local, 16);
         String name = base;
         for (int i = 2; users.existsByUsername(name); i++) {
             String suffix = "_" + i;

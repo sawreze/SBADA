@@ -40,6 +40,7 @@ demo-send-request.bat  :: 6) 시연: 다른 사용자가 교환 요청 → 에�
 ```
 
 시연 계정(서버가 처음 켜질 때 자동 생성, 로컬 전용 공개 비밀번호): `minji` · `dohyun` · `junho` · `seoyeon` / `sbada1234`
+(2026-11-25부터 앱은 **이메일 로그인**: `minji@sbada.test` · `admin@sbada.test` … 처럼 `아이디@sbada.test`. 예전 아이디만 쳐도 된다. 직접 확인용 `tester1~3@sbada.test` 는 `테스트계정_만들기.command`)
 
 ## AI(Gemma) 연결 — 비밀값은 Git에 올리지 않기
 

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../network/api_exception.dart';
 import '../services/app_services.dart';
-import '../services/kakao_login.dart';
 import '../theme/app_theme.dart';
 import '../util/id_input.dart';
 import '../widgets/common.dart';
@@ -25,7 +24,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   bool _loading = false;
   bool _keep = true; // 로그인 유지
-  bool _kakaoLoading = false;
   String? _error;
 
   @override
@@ -52,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     if (_loading) return;
     if (_username.text.trim().isEmpty || _password.text.isEmpty) {
-      setState(() => _error = '아이디와 비밀번호를 입력해 주세요.');
+      setState(() => _error = '이메일과 비밀번호를 입력해 주세요.');
       return;
     }
     setState(() {
@@ -68,29 +66,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  /// 카카오로 시작하기: 카카오 SDK 로그인 → 카카오 토큰을 서버에 보내 스바다 JWT 받기 → 로그인과 같은 다음 화면
-  Future<void> _kakao() async {
-    if (_loading || _kakaoLoading) return;
-    setState(() {
-      _kakaoLoading = true;
-      _error = null;
-    });
-    try {
-      final kakaoToken = await KakaoLogin.obtainAccessToken();
-      if (kakaoToken == null || !mounted) return; // 사용자가 취소
-      await widget.services.session.setKeepLogin(_keep);
-      await widget.services.auth.kakaoLogin(kakaoToken, remember: _keep);
-      if (!mounted) return;
-      await AppFlow.afterLogin(context, widget.services);
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } on KakaoLoginException catch (e) {
-      if (mounted) showSnack(context, e.message);
-    } finally {
-      if (mounted) setState(() => _kakaoLoading = false);
     }
   }
 
@@ -140,17 +115,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text('사진만 찍으면 AI가 가격을 매기고\n같은 가격대 이웃을 찾아 줘요.',
                         style: TextStyle(fontSize: 15, color: Sb.text2, height: 1.5)),
                     const SizedBox(height: 36),
-                    _label('아이디'),
+                    _label('이메일'),
                     TextField(
                       controller: _username,
                       textInputAction: TextInputAction.next,
                       autocorrect: false,
                       enableSuggestions: false,
-                      // 아이디는 영문 · 숫자만: 영문 키보드로 열고, 한글로 쳐도 자판 위치대로 영문으로 바꾼다
-                      keyboardType: idKeyboardType,
-                      inputFormatters: const [IdInputFormatter()],
+                      // 2026-11-25 사용자 요청: 아이디 → 이메일 로그인. 이메일 키보드로 열고, 한글로 쳐도 자판 위치대로 영문으로
+                      // (시연 계정은 admin@sbada.test 처럼 '아이디@sbada.test'. 예전 아이디만 쳐도 서버가 받아 준다)
+                      keyboardType: emailKeyboardType,
+                      autofillHints: const [AutofillHints.email],
+                      inputFormatters: const [IdInputFormatter.email()],
                       scrollPadding: const EdgeInsets.only(bottom: 220),
-                      decoration: sbInput(null, hint: '아이디를 입력하세요'),
+                      decoration: sbInput(null, hint: '이메일을 입력하세요'),
                     ),
                     const SizedBox(height: 12),
                     _label('비밀번호'),
@@ -172,17 +149,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: 22, height: 22, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
                           : const Text('로그인'),
                     ),
-                    const SizedBox(height: 16),
-                    Row(children: [
-                      Expanded(child: Divider(color: Sb.text3.withValues(alpha: 0.3))),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('또는', style: TextStyle(fontSize: 13, color: Sb.text3)),
-                      ),
-                      Expanded(child: Divider(color: Sb.text3.withValues(alpha: 0.3))),
-                    ]),
-                    const SizedBox(height: 16),
-                    KakaoStartButton(loading: _kakaoLoading, onPressed: _loading ? null : _kakao),
+                    // 2026-11-25 사용자 요청: 이메일 로그인 화면에서는 카카오 버튼('또는' 줄 포함)을 뺀다.
+                    // 카카오 로그인은 시작 화면(start_screen.dart)의 소셜 버튼으로만.
                   ]),
                   Column(mainAxisSize: MainAxisSize.min, children: [
                     const SizedBox(height: 24),

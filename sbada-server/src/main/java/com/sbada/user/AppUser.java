@@ -59,6 +59,10 @@ public class AppUser {
     @Column(nullable = false, length = 20)
     private String region;
 
+    /** 로그인 이메일(V20, 소문자로 저장). 카카오로 가입한 계정은 null 일 수 있다 */
+    @Column(length = 254, unique = true)
+    private String email;
+
     /** 알림 설정(V14, 계정정보 > 알림 설정): 찜 · 채팅 · 교환 알림을 받을지. 기본 모두 true */
     @Column(name = "notify_like", nullable = false)
     private boolean notifyLike = true;
@@ -120,6 +124,11 @@ public class AppUser {
      * 카카오 로그인으로 처음 들어온 사람의 계정을 만든다(정적 팩토리 메서드).
      * 비밀번호 로그인은 쓰지 않으므로 passwordHash 에는 아무도 모르는 임의 값의 해시를 넣는다(열이 NOT NULL 이라서).
      */
+    /** 이메일 정하기(회원가입). 앞뒤 공백을 빼고 소문자로 */
+    public void assignEmail(String email) {
+        this.email = email == null || email.isBlank() ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
     public static AppUser forKakao(long kakaoId, String username, String unusablePasswordHash, String nickname,
                                    String region) {
         AppUser user = new AppUser(username, unusablePasswordHash, nickname, region);

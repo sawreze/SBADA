@@ -2,6 +2,7 @@ package com.sbada.auth;
 
 import com.sbada.user.UserDtos;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -29,7 +30,7 @@ public final class AuthDtos {
 
     /** POST /api/auth/signup 요청 본문 */
     public record SignupRequest(
-            @NotBlank(message = "아이디를 입력해 주세요.")
+            // 2026-11-25: 이메일 가입으로 바뀌어 아이디는 선택(없으면 이메일 앞부분으로 자동). 보내면 예전 규칙 그대로 검사
             @Pattern(regexp = "^[a-z0-9_]{4,20}$", message = "아이디는 영문 소문자·숫자·밑줄 4~20자입니다.")
             String username,
             @NotBlank(message = "비밀번호를 입력해 주세요.")
@@ -39,7 +40,15 @@ public final class AuthDtos {
             @Size(min = 2, max = 12, message = "닉네임은 2~12자입니다.")
             String nickname,
             @Size(max = 20, message = "동네 이름은 20자 이하입니다.")
-            String region) { // @NotBlank 가 없으므로 선택 항목(null 가능)
+            String region, // @NotBlank 가 없으므로 선택 항목(null 가능)
+            // 로그인 이메일(V20). 앱은 이메일로 가입한다. 아이디만 보내는 예전 방식(테스트 · 스크립트)도 받는다
+            @Email(regexp = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", message = "이메일 형식이 올바르지 않습니다.")
+            @Size(max = 254, message = "이메일이 너무 깁니다.")
+            String email) {
+
+        public SignupRequest(String username, String password, String nickname, String region) {
+            this(username, password, nickname, region, null);
+        }
     }
 
     /**
@@ -47,12 +56,23 @@ public final class AuthDtos {
      * rememberMe(선택): 로그인 화면의 '로그인 유지' 체크 — true 면 오래 가는 토큰(기본 30일), 없거나 false 면 2시간
      */
     public record LoginRequest(
-            @NotBlank(message = "아이디를 입력해 주세요.") String username,
+            String username, // 예전 아이디 로그인(그대로 받는다). 앱은 email 을 보낸다
             @NotBlank(message = "비밀번호를 입력해 주세요.") String password,
-            Boolean rememberMe) {
+            Boolean rememberMe,
+            String email) {
 
         public LoginRequest(String username, String password) {
-            this(username, password, null);
+            this(username, password, null, null);
+        }
+
+        public LoginRequest(String username, String password, Boolean rememberMe) {
+            this(username, password, rememberMe, null);
+        }
+
+        /** 로그인에 쓸 값: email 이 있으면 email, 없으면 username(둘 다 '@' 가 있으면 이메일로 찾는다) */
+        public String identifier() {
+            String id = email != null && !email.isBlank() ? email : username;
+            return id == null ? "" : id.trim();
         }
 
         public boolean remember() {

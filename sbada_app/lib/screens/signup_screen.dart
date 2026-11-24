@@ -19,7 +19,7 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _username = TextEditingController();
+  final _email = TextEditingController();
   final _password = TextEditingController();
   final _nickname = TextEditingController();
   final _region = TextEditingController(text: '마포구');
@@ -37,7 +37,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   void dispose() {
-    _username.dispose();
+    _email.dispose();
     _password.dispose();
     _nickname.dispose();
     _region.dispose();
@@ -52,7 +52,7 @@ class _SignupScreenState extends State<SignupScreen> {
     });
     try {
       await widget.services.auth.signup(
-        username: _username.text,
+        email: _email.text,
         password: _password.text,
         nickname: _nickname.text,
         region: _region.text,
@@ -86,16 +86,16 @@ class _SignupScreenState extends State<SignupScreen> {
             Text('간단하게\n가입하고 시작해요', style: sbTitle),
             const SizedBox(height: 24),
             TextFormField(
-              controller: _username,
+              controller: _email,
               autocorrect: false,
               enableSuggestions: false,
-              // 2026-11-25: 아이디는 영문 키보드로, 한글로 쳐도 자판 위치대로 영문으로(util/id_input.dart)
-              keyboardType: idKeyboardType,
-              inputFormatters: const [IdInputFormatter()],
-              decoration: sbInput('아이디', hint: '영문 소문자·숫자·밑줄 4~20자', errorText: e?.fieldError('username')),
-              validator: (v) => RegExp(r'^[a-z0-9_]{4,20}$').hasMatch(v?.trim() ?? '')
-                  ? null
-                  : '영문 소문자·숫자·밑줄 4~20자로 입력해 주세요.',
+              // 2026-11-25 사용자 요청: 아이디 대신 이메일로 가입(@핸들은 서버가 이메일 앞부분으로 만든다).
+              // 이메일 키보드로 열고, 한글로 쳐도 자판 위치대로 영문으로(util/id_input.dart)
+              keyboardType: emailKeyboardType,
+              autofillHints: const [AutofillHints.email],
+              inputFormatters: const [IdInputFormatter.email()],
+              decoration: sbInput('이메일', hint: 'name@example.com', errorText: e?.fieldError('email')),
+              validator: (v) => isEmail(v ?? '') ? null : '이메일 형식으로 입력해 주세요.',
             ),
             const SizedBox(height: 12),
             TextFormField(

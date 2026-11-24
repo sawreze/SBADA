@@ -24,6 +24,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     boolean existsByUsername(String username);
 
+    /** 이메일 로그인(V20). 이메일은 소문자로 저장하므로 찾을 때도 소문자로 */
+    Optional<AppUser> findByEmail(String email);
+
+    boolean existsByEmail(String email);
+
     /** 카카오 로그인: 카카오 회원번호로 연결된 스바다 계정 찾기 (SELECT … WHERE kakao_id = ?) */
     Optional<AppUser> findByKakaoId(Long kakaoId);
 }

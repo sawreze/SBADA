@@ -44,7 +44,7 @@ class _StartScreenState extends State<StartScreen> {
     }
   }
 
-  void _soon(String name) => showSnack(context, '$name 로그인은 준비 중이에요. 카카오나 아이디로 시작해 주세요.');
+  void _soon(String name) => showSnack(context, '$name 로그인은 준비 중이에요. 카카오나 이메일로 시작해 주세요.');
 
   void _idLogin({String? notice}) => Navigator.of(context)
       .push(appRoute<void>(builder: (_) => LoginScreen(services: widget.services, notice: notice)));
@@ -121,7 +121,7 @@ class _StartScreenState extends State<StartScreen> {
                     TextButton(
                       key: const ValueKey('start-id-login'),
                       onPressed: _idLogin,
-                      child: Text('아이디로 로그인', style: TextStyle(color: Sb.p.text2, fontWeight: FontWeight.w600)),
+                      child: Text('이메일로 로그인', style: TextStyle(color: Sb.p.text2, fontWeight: FontWeight.w600)),
                     ),
                   ]),
                 ]),

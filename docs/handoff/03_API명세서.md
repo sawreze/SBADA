@@ -8,7 +8,7 @@
 | 영역 | 주소 |
 |---|---|
 | 상태 | `GET /api/health` |
-| 인증 | `POST /api/auth/signup` · `/login`(rememberMe) · `/kakao` |
+| 인증 | `POST /api/auth/signup`(email · password · nickname, username 은 선택 — 없으면 이메일 앞부분으로) · `/login`(email 또는 예전 username · rememberMe) · `/kakao` |
 | 내 정보 | `GET/PUT /api/me/...` (profile, password, photo, preferences, region, second-region, notification-settings), `GET /api/me/items`, `/api/me/likes` |
 | 물건 | `GET/POST /api/items`, `GET/PUT/DELETE /api/items/{id}`, `/api/items/{id}/like`, `/matches`, `/summary`, `GET /api/items/count`, `GET /api/categories` |
 | AI | `POST /api/ai/analyze` → AnalysisView(price, priceMin, priceMax, confidence, reason, tags, **newPrice**, marketSamples …), `GET /api/ai/status` |

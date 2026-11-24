@@ -30,11 +30,11 @@ public final class UserDtos {
      *          "profileImageUrl":null,"secondRegion":"마포구 합정동"}   (secondRegion: 하나 더 추가한 동네, 없으면 null)
      */
     public record UserView(long id, String username, String nickname, String region, boolean onboarded,
-                           String profileImageUrl, String secondRegion) {
+                           String profileImageUrl, String secondRegion, String email) {
         public static UserView from(AppUser u) {
             String photo = u.getProfileImageId() == null ? null : "/api/images/" + u.getProfileImageId();
             return new UserView(u.getId(), u.getUsername(), u.getNickname(), u.getRegion(), u.isOnboarded(), photo,
-                    u.getSecondRegion());
+                    u.getSecondRegion(), u.getEmail());
         }
     }
 
