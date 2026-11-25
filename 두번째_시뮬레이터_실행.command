@@ -29,6 +29,10 @@ d=json.load(sys.stdin)['devices']
 rt=[(k,v) for k,v in d.items() if 'iOS' in k]
 booted=[x for _,v in rt for x in v if x.get('state')=='Booted' and 'iPhone' in x['name']]
 first=booted[0] if booted else None
+duo=[x for x in booted if 'Duo' in x['name']]
+if duo:  # 2026-11-25: 켜져 있는 iPhone Duo 가 있으면 그것을 두 번째로
+    rest=[x for x in booted if x['udid']!=duo[0]['udid']]
+    print(rest[0]['udid'] if rest else '-', duo[0]['udid']); sys.exit()
 if len(booted)>=2:
     print(first['udid'], booted[1]['udid']); sys.exit()
 same=[v for k,v in rt if first and any(x['udid']==first['udid'] for x in v)]
