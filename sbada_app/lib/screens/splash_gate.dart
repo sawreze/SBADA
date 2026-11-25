@@ -91,7 +91,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
     ));
   }
 
-  /// 실행 화면: 앱 아이콘 배경색 위 정가운데에 아이콘 그림, 그 아래 "쓰던 물건을 바꾸다."
+  /// 실행 화면: 앱 아이콘 배경색 위 정가운데에 아이콘 그림, 그 아래 "쓰던 물건으로 세상을 바꾸다."(2026-11-25 문구 변경)
   /// 다크/화이트 모드와 상관없이 같은 색(아이콘과 이어져 보이게). 글자는 민트 위 규칙대로 짙은 색.
   @override
   Widget build(BuildContext context) {
@@ -112,7 +112,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
               padding: EdgeInsets.only(top: textTop * 2 + 26),
               child: FadeTransition(
                 opacity: textIn,
-                child: const Text('쓰던 물건을 바꾸다.',
+                child: const Text('쓰던 물건으로 세상을 바꾸다.',
                     style: TextStyle(
                         fontSize: 20, fontWeight: FontWeight.w800, color: Sb.onAccent, letterSpacing: -0.4, height: 1.3)),
               ),

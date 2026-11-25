@@ -9,7 +9,7 @@ import 'package:sbada/theme/app_theme.dart';
 import 'widget_test.dart' show fakeServices, phoneSize;
 
 void main() {
-  testWidgets('실행 화면: 아이콘 배경색 위 가운데 아이콘 + "쓰던 물건을 바꾸다." 를 2.5초 보여 준 뒤 다음 화면으로 간다', (tester) async {
+  testWidgets('실행 화면: 아이콘 배경색 위 가운데 아이콘 + "쓰던 물건으로 세상을 바꾸다." 를 2.5초 보여 준 뒤 다음 화면으로 간다', (tester) async {
     phoneSize(tester);
     final services = fakeServices(MemoryStore()); // 처음 설치(로그인 전) → 다음은 온보딩
     await tester.pumpWidget(SbadaApp(services: services));
@@ -17,7 +17,7 @@ void main() {
 
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
     expect(scaffold.backgroundColor, Sb.splashBg);
-    expect(find.text('쓰던 물건을 바꾸다.'), findsOneWidget);
+    expect(find.text('쓰던 물건으로 세상을 바꾸다.'), findsOneWidget);
     final logo = find.byType(SwapLogo);
     for (final asset in ['assets/splash_left.png', 'assets/splash_right.png']) {
       expect(find.byWidgetPredicate((w) => w is Image && w.image is AssetImage && (w.image as AssetImage).assetName == asset),
