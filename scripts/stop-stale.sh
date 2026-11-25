@@ -21,6 +21,13 @@ started(){ # PID 시작 시각(초) = 지금 - 돌아간 시간(etime: [[일-]�
 check(){ # 포트 폴더
   local port="$1" dir="$2" pid st nw
   pid="$(lsof -ti tcp:$port -sTCP:LISTEN 2>/dev/null | head -1)"; [ -z "$pid" ] && return
+  # 2026-11-25: 다른 폴더(예: 구글드라이브 사본)에서 켜진 서버면 끈다 — 키 · DB · 토큰 파일이 달라서
+  #  로그인 만료(401) · 물품 서버 DOWN 이 난다
+  local cwd; cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+  if [ -n "$cwd" ] && [ "${cwd#$ROOT/}" = "$cwd" ]; then
+    echo "포트 $port 서버가 다른 폴더($cwd)에서 켜져 있어요 → 끄고 이 폴더에서 새로 켭니다"
+    kill $(lsof -ti tcp:$port -sTCP:LISTEN 2>/dev/null); sleep 3; return
+  fi
   st="$(started "$pid")"; nw="$(newest "$ROOT/$dir/src/main" "$ROOT/$dir/build.gradle" "$ROOT/sbada-proto/proto")"
   [ -z "$st" ] || [ -z "$nw" ] && return
   if [ "$nw" -gt "$st" ]; then
