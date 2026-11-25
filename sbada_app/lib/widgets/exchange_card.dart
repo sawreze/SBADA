@@ -74,7 +74,15 @@ class ExchangeCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(e.closeReason!, style: sbCaption),
         ],
-        if (e.isPending && receiver && (onAccept != null || onReject != null)) ...[
+        // 2026-11-25: 추가요금 요청 중 · 결제 대기 중에는 수락 · 거절 대신 안내만(채팅의 거래 카드에서 진행)
+        if (e.isPending && (e.extraRequestStatus == 'REQUESTED' || e.extraRequestStatus == 'AGREED')) ...[
+          const SizedBox(height: 10),
+          Text(
+              e.extraRequestStatus == 'REQUESTED'
+                  ? '추가요금 ${formatWon(e.extraAmount)} 요청 — ${receiver ? '상대의 답을 기다리는 중' : '채팅에서 수락 · 거절을 골라 주세요'}'
+                  : '추가요금 ${formatWon(e.extraAmount)} — ${receiver ? '상대의 결제를 기다리는 중' : '채팅에서 결제해 주세요'}',
+              style: sbCaption),
+        ] else if (e.isPending && receiver && (onAccept != null || onReject != null)) ...[
           const SizedBox(height: 14),
           Row(children: [
             Expanded(
@@ -87,7 +95,7 @@ class ExchangeCard extends StatelessWidget {
                 onPressed: busy ? null : onAccept,
                 child: busy
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Sb.onAccent)))
-                    : const Text('수락하고 교환하기'),
+                    : const Text('수락'),
               ),
             ),
           ]),

@@ -76,6 +76,12 @@ public class ItemGraphqlController {
     }
 
     @QueryMapping
+    public List<ItemDtos.ItemView> userItems(@Argument int userId, @Argument Integer limit) {
+        int n = limit == null ? 50 : Math.max(1, Math.min(limit, 100));
+        return items.ofUser(userId, n).items();
+    }
+
+    @QueryMapping
     public int itemCount(@Argument String area) {
         return (int) items.count(area);
     }

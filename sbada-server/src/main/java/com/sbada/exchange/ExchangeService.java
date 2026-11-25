@@ -72,6 +72,10 @@ public class ExchangeService {
      */
     private final Set<String> instantExchangeUsers;
 
+    /** 2026-11-25 운송장 입력 기간(일). 지나면 거래 취소 · 전액 환불 */
+    @Value("${sbada.shipping.window-days:7}")
+    private long shipWindowDays = 7;
+
     public ExchangeService(ExchangeRepository exchanges, ItemCatalog items, EventPublisher events,
                            AppUserRepository users, ChatService chat, NotificationService notifications,
                            PreferenceService preferences, RealtimeHub hub, PaymentClient payments,
@@ -171,6 +175,13 @@ public class ExchangeService {
         if (!request.isReceivedBy(userId)) {
             throw ApiException.forbidden("NOT_RECEIVER", "요청을 받은 사람만 수락할 수 있습니다.");
         }
+        // 2026-11-25: 추가요금을 요청해 둔 동안은 바로 수락할 수 없다(상대의 답 · 결제를 기다림)
+        if (request.getExtraRequestStatus() == ExtraRequestStatus.REQUESTED) {
+            throw ApiException.conflict("EXTRA_PENDING", "추가요금 요청에 대한 상대의 답을 기다리는 중이에요.");
+        }
+        if (request.getExtraRequestStatus() == ExtraRequestStatus.AGREED) {
+            throw ApiException.conflict("EXTRA_PAYMENT_PENDING", "상대가 추가요금을 수락했어요. 결제가 확인되면 교환이 자동으로 진행돼요.");
+        }
         complete(request, false);
         return view(request, userId);
     }
@@ -215,20 +226,108 @@ public class ExchangeService {
         events.publish(Topics.EXCHANGE, request.getId(), "EXCHANGE_ACCEPTED", Map.of("exchangeId", request.getId(),
                 "offeredItemId", request.getOfferedItemId(), "targetItemId", request.getTargetItemId()));
         postSystem(request, String.format("🎉 교환이 성사되었어요! '%s' ↔ '%s'", offered.title(), target.title()));
+        // 2026-11-25 사용자 요청: 성사되면 두 사람에게 운송장 입력 카드(7일 안에, 지나면 거래 취소 · 전액 환불)
+        request.startShipping(java.time.Duration.ofDays(shipWindowDays));
+        postCard(request, ChatMessage.Type.SHIPPING, String.format(
+                "📦 %d일 안에 두 분 모두 보낸 물건의 운송장 번호를 입력해 주세요. 택배사 접수가 확인되면 배송 현황을 알려 드려요.",
+                shipWindowDays));
         if (instant) {
             notifications.notify(receiverId, NotificationType.EXCHANGE_ACCEPTED,
                     "교환이 성사되었어요 🎉",
-                    String.format("%s님과 '%s' ↔ '%s' 교환이 바로 성사되었어요(시연 계정). 채팅으로 만날 약속을 정해 보세요.",
+                    String.format("%s님과 '%s' ↔ '%s' 교환이 바로 성사되었어요(시연 계정). 7일 안에 운송장 번호를 입력해 주세요.",
                             request.getRequester().getNickname(), offered.title(), target.title()),
                     "EXCHANGE", request.getId());
         } else {
             notifications.notify(request.getRequester().getId(), NotificationType.EXCHANGE_ACCEPTED,
                     "교환이 성사되었어요 🎉",
-                    String.format("%s님이 '%s' ↔ '%s' 교환을 수락했어요. 채팅으로 만날 약속을 정해 보세요.",
+                    String.format("%s님이 '%s' ↔ '%s' 교환을 수락했어요. 7일 안에 운송장 번호를 입력해 주세요.",
                             request.getTargetOwner().getNickname(), offered.title(), target.title()),
                     "EXCHANGE", request.getId());
         }
         publish(request);
+    }
+
+    // ───────────── 2026-11-25 사용자 요청: 수락 → 바로 수락 / 추가요금 요청 ─────────────
+
+    /**
+     * POST /api/exchanges/{id}/extra-request {amount} — 받은 사람이 '추가요금 요청'.
+     * 사용자 결정: 물건 가격(AI 가격)이 더 낮은 쪽이 더 높은 쪽에게만 요청할 수 있다
+     *  → 받은 사람의 물건(원하는 물건)이 보낸 사람의 물건보다 싸야 하고, 보낸 사람이 돈을 낸다.
+     */
+    @Transactional
+    public ExchangeDtos.ExchangeView requestExtraFee(long requestId, long userId, long amount) {
+        ExchangeRequest request = require(requestId);
+        if (!request.isReceivedBy(userId)) {
+            throw ApiException.forbidden("NOT_RECEIVER", "교환 요청을 받은 사람만 추가요금을 요청할 수 있어요.");
+        }
+        if (amount <= 0) {
+            throw ApiException.badRequest("INVALID_EXTRA_AMOUNT", "추가요금은 1,000원 이상 1,000,000원 이하로 정해 주세요.");
+        }
+        checkExtraAmount(amount);
+        Map<Long, ItemRef> refs = items.get(List.of(request.getOfferedItemId(), request.getTargetItemId()));
+        ItemRef mine = ref(refs, request.getTargetItemId());
+        ItemRef theirs = ref(refs, request.getOfferedItemId());
+        if (!canRequestExtra(mine.price(), theirs.price())) {
+            throw ApiException.conflict("EXTRA_NOT_ALLOWED", String.format(
+                    "추가요금은 물건 가격이 더 낮은 쪽만 요청할 수 있어요. (내 물건 %s · 상대 물건 %s)",
+                    won(mine.price()), won(theirs.price())));
+        }
+        request.requestExtraFee(amount);
+        AppUser owner = request.getTargetOwner();
+        postCard(request, ChatMessage.Type.EXTRA_REQUEST, String.format(
+                "💰 %s님이 추가요금 %s을 요청했어요. 수락하면 결제 뒤 교환이 진행되고, 거절하면 %s님이 다시 선택해요.",
+                owner.getNickname(), won(amount), owner.getNickname()));
+        notifications.notify(request.getRequester().getId(), NotificationType.EXCHANGE_REQUESTED,
+                "추가요금 요청이 왔어요",
+                String.format("%s님이 '%s' 교환에 추가요금 %s을 요청했어요. 채팅에서 수락 · 거절을 골라 주세요.",
+                        owner.getNickname(), mine.title(), won(amount)),
+                "EXCHANGE", request.getId());
+        publish(request, refs);
+        return ExchangeDtos.ExchangeView.from(request, userId, refs);
+    }
+
+    /** 규칙 한 곳(사용자 결정): 내 물건이 상대 물건보다 싸야 추가요금을 요청할 수 있다 */
+    static boolean canRequestExtra(int myItemPrice, int theirItemPrice) {
+        return myItemPrice > 0 && theirItemPrice > 0 && myItemPrice < theirItemPrice;
+    }
+
+    /** POST /api/exchanges/{id}/extra-request/accept — 보낸 사람이 추가요금 요청을 수락 → 결제 대기 */
+    @Transactional
+    public ExchangeDtos.ExchangeView agreeExtraFee(long requestId, long userId) {
+        ExchangeRequest request = require(requestId);
+        if (!request.isRequestedBy(userId)) {
+            throw ApiException.forbidden("NOT_REQUESTER", "추가요금 요청을 받은 사람만 수락할 수 있어요.");
+        }
+        request.agreeExtraFee();
+        postSystem(request, String.format("✅ %s님이 추가요금 %s을 수락했어요. 결제가 확인되면 교환이 진행돼요.",
+                request.getRequester().getNickname(), won(request.getExtraAmount())));
+        notifications.notify(request.getTargetOwner().getId(), NotificationType.EXCHANGE_ACCEPTED,
+                "추가요금 요청을 수락했어요",
+                String.format("%s님이 추가요금 %s을 수락했어요. 결제가 확인되면 교환이 진행돼요.",
+                        request.getRequester().getNickname(), won(request.getExtraAmount())),
+                "EXCHANGE", request.getId());
+        publish(request);
+        return view(request, userId);
+    }
+
+    /** POST /api/exchanges/{id}/extra-request/decline — 보낸 사람이 거절 → 받은 사람이 다시 선택 */
+    @Transactional
+    public ExchangeDtos.ExchangeView declineExtraFee(long requestId, long userId) {
+        ExchangeRequest request = require(requestId);
+        if (!request.isRequestedBy(userId)) {
+            throw ApiException.forbidden("NOT_REQUESTER", "추가요금 요청을 받은 사람만 거절할 수 있어요.");
+        }
+        long amount = request.getExtraAmount();
+        request.declineExtraFee();
+        AppUser owner = request.getTargetOwner();
+        postSystem(request, String.format("❌ %s님이 추가요금 %s 요청을 거절했어요. %s님이 바로 수락하거나 거절할 수 있어요.",
+                request.getRequester().getNickname(), won(amount), owner.getNickname()));
+        notifications.notify(owner.getId(), NotificationType.EXCHANGE_REJECTED, "추가요금 요청이 거절되었어요",
+                String.format("%s님이 추가요금 요청을 거절했어요. 채팅에서 바로 수락하거나 교환을 거절할 수 있어요.",
+                        request.getRequester().getNickname()),
+                "EXCHANGE", request.getId());
+        publish(request);
+        return view(request, userId);
     }
 
     /** POST /api/exchanges/{id}/reject — 거절 */
@@ -429,6 +528,21 @@ public class ExchangeService {
                 if (request.payment() == PaymentStatus.NONE || request.payment() == PaymentStatus.REFUNDED) {
                     markPayment(request, PaymentStatus.PAID_HELD);
                 }
+                // 2026-11-25: 추가요금을 수락한 쪽의 결제가 확인되면 교환이 자동으로 진행(성사 → 운송장 단계)
+                if (request.getStatus() == ExchangeStatus.REQUESTED
+                        && request.getExtraRequestStatus() == ExtraRequestStatus.AGREED
+                        && request.payment() == PaymentStatus.PAID_HELD) {
+                    try {
+                        postSystem(request, "💳 결제가 확인되어 교환을 진행해요.");
+                        complete(request, false);
+                    } catch (ApiException e) {
+                        // 그 사이 물건이 내려가거나 다른 교환으로 거래 완료된 경우: 교환 취소 + 전액 환불
+                        request.cancel("물건을 교환할 수 없게 되어 취소되었어요: " + e.getMessage());
+                        postSystem(request, "↩️ 물건을 교환할 수 없게 되어 거래가 취소되었어요. 결제한 금액은 환불돼요.");
+                        refundIfPaid(request, "물건을 교환할 수 없게 되어");
+                        publish(request);
+                    }
+                }
             }
             case "ESCROW_RELEASED" -> markPayment(request, PaymentStatus.RELEASED);
             case "ESCROW_REFUNDED" -> markPayment(request, PaymentStatus.REFUNDED);
@@ -456,7 +570,7 @@ public class ExchangeService {
     }
 
     /** 상태를 바꾸고, 실제로 바뀌었으면 채팅에 한 줄 + 두 사람 화면 갱신 */
-    private void markPayment(ExchangeRequest request, PaymentStatus next) {
+    void markPayment(ExchangeRequest request, PaymentStatus next) {
         if (!request.changePayment(next)) {
             return;
         }
@@ -475,7 +589,7 @@ public class ExchangeService {
     }
 
     /** 거절 · 취소 때: 결제되어 보관 중인 돈이 있으면 커밋 뒤 환불 요청(실패해도 결제 서비스가 나중에 다시 처리) */
-    private void refundIfPaid(ExchangeRequest request, String reason) {
+    void refundIfPaid(ExchangeRequest request, String reason) {
         if (request.payment() != PaymentStatus.PAID_HELD) {
             return;
         }
@@ -500,18 +614,23 @@ public class ExchangeService {
                 payer.getNickname(), payee.getNickname(), won(r.getExtraAmount()));
     }
 
-    private static String won(long amount) {
+    static String won(long amount) {
         return NumberFormat.getNumberInstance(Locale.KOREA).format(amount) + "원";
     }
 
     /** 채팅방에 시스템 메시지(보낸 사람 없음)를 남긴다. 채팅방이 없는 오래된 요청이면 건너뜀. */
-    private void postSystem(ExchangeRequest request, String content) {
+    void postSystem(ExchangeRequest request, String content) {
+        postCard(request, ChatMessage.Type.SYSTEM, content);
+    }
+
+    /** 2026-11-25 교환과 연결된 카드 메시지(EXTRA_REQUEST · SHIPPING) — 앱은 이 메시지를 교환 카드로 그린다 */
+    void postCard(ExchangeRequest request, ChatMessage.Type type, String content) {
         if (request.getChatRoomId() == null) {
             return;
         }
         ChatRoom room = chat.roomOf(request.getChatRoomId());
         if (room != null) {
-            chat.post(room, null, ChatMessage.Type.SYSTEM, content, request);
+            chat.post(room, null, type, content, request);
         }
     }
 
@@ -521,7 +640,7 @@ public class ExchangeService {
      * 사람마다 myRole 이 다르므로 각자용 DTO 를 따로 만들고, 실제 전송은 커밋 후(AfterCommit)에 한다.
      * 람다 안에서 쓰는 지역 변수(requesterId 등)는 값이 바뀌지 않아야 한다(effectively final).
      */
-    private void publish(ExchangeRequest request) {
+    void publish(ExchangeRequest request) {
         publish(request, items.get(List.of(request.getOfferedItemId(), request.getTargetItemId())));
     }
 
@@ -536,17 +655,17 @@ public class ExchangeService {
         });
     }
 
-    private ExchangeRequest require(long id) {
+    ExchangeRequest require(long id) {
         return exchanges.findById(id)
                 .orElseThrow(() -> ApiException.notFound("EXCHANGE_NOT_FOUND", "교환 요청을 찾을 수 없습니다."));
     }
 
     /** 교환 카드 한 장(물건 요약은 물품 서버에서) */
-    private ExchangeDtos.ExchangeView view(ExchangeRequest r, Long viewerId) {
+    ExchangeDtos.ExchangeView view(ExchangeRequest r, Long viewerId) {
         return ExchangeDtos.ExchangeView.from(r, viewerId, items.get(List.of(r.getOfferedItemId(), r.getTargetItemId())));
     }
 
-    private static ItemRef ref(Map<Long, ItemRef> refs, long id) {
+    static ItemRef ref(Map<Long, ItemRef> refs, long id) {
         return refs.getOrDefault(id, ItemRef.unknown(id));
     }
 

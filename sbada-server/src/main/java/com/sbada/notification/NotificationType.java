@@ -21,14 +21,18 @@ public enum NotificationType {
     /** 누군가 내 물건을 찜했다(V14) */
     ITEM_LIKED,
     /** 결제 서비스(별도 마이크로서비스)가 보낸 지갑 이벤트: 출금 · 결제 · 추가 요금 입금 */
-    WALLET;
+    WALLET,
+    /** 2026-11-25 운송장 등록 · 배송 현황 변경 · 배송 완료 · 7일 만료 */
+    DELIVERY,
+    /** 2026-11-25 상대가 나에게 거래 후기를 남겼다 */
+    REVIEW_RECEIVED;
 
     /** 계정정보 > 알림 설정의 어느 스위치에 속하는지: like · chat · exchange (그 밖의 알림은 항상 보냄 → null) */
     public String settingKey() {
         return switch (this) {
             case ITEM_LIKED -> "like";
             case CHAT_MESSAGE -> "chat";
-            case EXCHANGE_REQUESTED, EXCHANGE_ACCEPTED, EXCHANGE_REJECTED, EXCHANGE_CANCELED -> "exchange";
+            case EXCHANGE_REQUESTED, EXCHANGE_ACCEPTED, EXCHANGE_REJECTED, EXCHANGE_CANCELED, DELIVERY, REVIEW_RECEIVED -> "exchange";
             default -> null;
         };
     }

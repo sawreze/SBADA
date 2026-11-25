@@ -47,6 +47,25 @@ public final class ExchangeDtos {
             @Pattern(regexp = "ME|OTHER", message = "payer 는 ME 또는 OTHER 입니다.") String payer) {
     }
 
+    /** POST /api/exchanges/{id}/extra-request 본문(2026-11-25): 받은 사람이 요청하는 추가요금 */
+    public record ExtraFeeRequest(
+            @NotNull(message = "금액을 입력해 주세요.")
+            @Min(value = 1_000, message = "추가요금은 1,000원 이상이에요.")
+            @Max(value = 1_000_000, message = "추가요금은 1,000,000원 이하예요.") Long amount) {
+    }
+
+    /** 운송장 한 장(교환 카드의 배송 현황). mine = 내가 보낸 물건인지 */
+    public record ShipmentView(long senderId, boolean mine, String carrierCode, String carrierName, String invoiceMasked,
+                               String status, int level, String levelLabel, String lastDetail, String lastWhere,
+                               String lastTime, String deliveredAt) {
+        static ShipmentView from(com.sbada.shipping.Shipment s, Long viewerId) {
+            return new ShipmentView(s.getSender().getId(), viewerId != null && viewerId.equals(s.getSender().getId()),
+                    s.getCarrierCode(), s.getCarrierName(), s.maskedInvoice(), s.getStatus().name(), s.getLevel(),
+                    com.sbada.shipping.TrackResult.levelLabel(s.getLevel()), s.getLastDetail(), s.getLastWhere(),
+                    s.getLastTime(), s.getDeliveredAt() == null ? null : s.getDeliveredAt().toString());
+        }
+    }
+
     /**
      * myRole: 이 요청에서 나의 역할 — REQUESTER(보낸 사람) · RECEIVER(받은 사람)
      * priceDiffPercent: (내놓은 물건 가격 − 원하는 물건 가격) ÷ 원하는 물건 가격 × 100
@@ -57,7 +76,10 @@ public final class ExchangeDtos {
                                int priceDiffPercent, Long chatRoomId, String closeReason,
                                String createdAt, String respondedAt, String myRole,
                                long extraAmount, Long extraPayerId, String extraDirection, String paymentStatus,
-                               boolean iReceived, boolean otherReceived) {
+                               boolean iReceived, boolean otherReceived,
+                               // 2026-11-25 추가요금 요청 · 운송장 · 후기
+                               String extraRequestStatus, boolean canRequestExtra, String dealStage, String shipDeadline,
+                               String completedAt, List<ShipmentView> shipments, boolean iReviewed, boolean otherReviewed) {
         /**
          * items: 물품 서버에서 받은 물건 요약(번호 → 요약). 없으면(물품 서버가 꺼짐 등) '불러오지 못했어요'로 채운다.
          * 2026-11-25 MSA 2단계: 물건은 메인 DB 에 없으므로 부르는 쪽(ExchangeService)이 배달부로 한 번에 받아 넘긴다.
@@ -78,7 +100,19 @@ public final class ExchangeDtos {
                     diff, e.getChatRoomId(), e.getCloseReason(), e.getCreatedAt().toString(),
                     e.getRespondedAt() == null ? null : e.getRespondedAt().toString(), role,
                     e.getExtraAmount(), e.payerId(), direction(e, viewerId), e.getPaymentStatus(),
-                    received(e, viewerId, true), received(e, viewerId, false));
+                    received(e, viewerId, true), received(e, viewerId, false),
+                    e.getExtraRequestStatus().name(),
+                    // 받은 사람 · 대기 중 · 아직 요청 전(또는 거절됨) · 내 물건이 더 쌀 때만 '추가요금 요청' 버튼
+                    viewerId != null && e.isReceivedBy(viewerId) && e.getStatus() == ExchangeStatus.REQUESTED
+                            && (e.getExtraRequestStatus() == ExtraRequestStatus.NONE || e.getExtraRequestStatus() == ExtraRequestStatus.DECLINED)
+                            && !e.isPaymentLocked()
+                            && ExchangeService.canRequestExtra(targetRef.price(), offeredRef.price()),
+                    e.getDealStage().name(),
+                    e.getShipDeadline() == null ? null : e.getShipDeadline().toString(),
+                    e.getCompletedAt() == null ? null : e.getCompletedAt().toString(),
+                    e.getShipments().stream().map(s -> ShipmentView.from(s, viewerId)).toList(),
+                    viewerId != null && e.isParticipant(viewerId) && e.hasReviewed(viewerId),
+                    viewerId != null && e.isParticipant(viewerId) && e.hasReviewed(e.otherOf(viewerId)));
         }
 
         /** 양쪽 수령 확인: mine=true 면 내가, false 면 상대가 '물건 받았어요'를 눌렀는지 */

@@ -36,7 +36,8 @@ import lombok.NoArgsConstructor;
 public class ChatMessage {
 
     /** TEXT: 일반 대화 · PROPOSAL: 채팅 중 '교환 제안' 카드 · SYSTEM: 성사·거절 같은 안내 */
-    public enum Type { TEXT, PROPOSAL, SYSTEM }
+    /** 2026-11-25: EXTRA_REQUEST(추가요금 요청 카드) · SHIPPING(운송장 · 배송 카드) — 둘 다 교환과 연결돼 카드로 보인다 */
+    public enum Type { TEXT, PROPOSAL, SYSTEM, EXTRA_REQUEST, SHIPPING }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

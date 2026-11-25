@@ -20,6 +20,7 @@ import 'chat_room_screen.dart';
 import 'likes_screen.dart';
 import 'match_screen.dart';
 import 'place_map_screen.dart';
+import 'user_profile_screen.dart';
 import '../widgets/expand_route.dart';
 import '../widgets/ai_sparkle.dart';
 
@@ -248,7 +249,13 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               ),
             ]),
           ),
-        Row(children: [
+        // 2026-11-25: 올린 사람을 누르면 그 사람의 물건 · 거래 후기
+        InkWell(
+          key: const ValueKey('item-owner-profile'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => Navigator.of(context).push(appRoute<void>(
+              builder: (_) => UserProfileScreen(services: widget.services, user: item.owner))),
+          child: Row(children: [
           Container(
             width: 40,
             height: 40,
@@ -265,7 +272,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             ]),
           ),
           if (!item.isAvailable) Pill('교환 완료', color: Sb.greenSoft, textColor: Sb.green),
+          Icon(Icons.chevron_right_rounded, color: Sb.text3),
         ]),
+        ),
         const SizedBox(height: 12),
         Divider(height: 1, color: Sb.line),
         const SizedBox(height: 12),

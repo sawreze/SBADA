@@ -13,6 +13,8 @@ type Query {
   myItems: [Item!]!
   "내 관심목록(로그인 필요)"
   myLikes: [Item!]!
+  "2026-11-25 다른 사람 프로필: 그 사람이 올린 물건(교환 가능 · 거래 완료, 최신순). 프로필 아래에는 거래 후기(메인 서버 REST)"
+  userItems(userId: Int!, limit: Int = 50): [Item!]!
   "범위 안의 교환 가능한 물건 수(전국이면 area 생략)"
   itemCount(area: String): Int!
   categories: [Category!]!

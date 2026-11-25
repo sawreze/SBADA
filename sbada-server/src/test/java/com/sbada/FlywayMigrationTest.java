@@ -50,9 +50,9 @@ class FlywayMigrationTest {
     @Test
     void migrationsCreateSchemaAndDemoData() {
         Integer applied = jdbc.queryForObject(
-                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20')",
+                "select count(*) from \"flyway_schema_history\" where \"success\" = true and \"version\" in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21')",
                 Integer.class);
-        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(20);
+        org.assertj.core.api.Assertions.assertThat(applied).isEqualTo(21);
         // V20: 기존 계정은 아이디@sbada.test 이메일을 받는다(admin@sbada.test 로 로그인)
         org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
                 "select email from app_users where username = 'admin'", String.class)).isEqualTo("admin@sbada.test");

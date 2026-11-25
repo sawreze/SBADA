@@ -1,6 +1,8 @@
 package com.sbada.exchange;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.sbada.common.ApiException;
 import com.sbada.user.AppUser;
@@ -16,6 +18,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -105,6 +109,36 @@ public class ExchangeRequest {
 
     @Column(name = "owner_received_at")
     private Instant ownerReceivedAt;
+
+    // ── 2026-11-25 사용자 요청: 추가요금 요청 · 운송장 · 후기(V21) ──
+    /** 추가요금 요청 단계(받은 사람이 '추가요금 요청' → 보낸 사람이 수락 · 거절) */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "extra_request_status", nullable = false, length = 16)
+    private ExtraRequestStatus extraRequestStatus = ExtraRequestStatus.NONE;
+
+    /** 성사 뒤 단계: 운송장 입력 · 배송 중 → 두 물건 도착(완료) 또는 7일 만료 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deal_stage", nullable = false, length = 16)
+    private DealStage dealStage = DealStage.NONE;
+
+    /** 운송장 입력 마감(성사 + 7일) */
+    @Column(name = "ship_deadline")
+    private Instant shipDeadline;
+
+    /** 두 물건 모두 도착한 시각 */
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
+    @Column(name = "requester_reviewed", nullable = false)
+    private boolean requesterReviewed;
+
+    @Column(name = "owner_reviewed", nullable = false)
+    private boolean ownerReviewed;
+
+    /** 두 사람의 운송장(교환 카드에 배송 현황으로 보여 줌) */
+    @OneToMany(mappedBy = "exchange", fetch = FetchType.LAZY)
+    @OrderBy("id")
+    private List<com.sbada.shipping.Shipment> shipments = new ArrayList<>();
 
     public ExchangeRequest(AppUser requester, AppUser targetOwner, long offeredItemId, long targetItemId,
                            String message) {
@@ -233,6 +267,88 @@ public class ExchangeRequest {
 
     public boolean bothReceived() {
         return requesterReceivedAt != null && ownerReceivedAt != null;
+    }
+
+    // ───────────── 2026-11-25 추가요금 요청(받은 사람 → 보낸 사람) ─────────────
+
+    /** 받은 사람이 추가요금을 요청한다: 보낸 사람(REQUESTER)이 낼 금액으로 정하고 '요청됨' */
+    public void requestExtraFee(long amount) {
+        if (status != ExchangeStatus.REQUESTED) {
+            throw ApiException.conflict("INVALID_STATUS", "대기 중인 교환에서만 추가요금을 요청할 수 있어요.");
+        }
+        if (extraRequestStatus == ExtraRequestStatus.REQUESTED) {
+            throw ApiException.conflict("EXTRA_ALREADY_REQUESTED", "이미 추가요금을 요청했어요. 상대의 답을 기다려 주세요.");
+        }
+        if (extraRequestStatus == ExtraRequestStatus.AGREED) {
+            throw ApiException.conflict("EXTRA_ALREADY_AGREED", "상대가 추가요금을 수락해 결제를 기다리는 중이에요.");
+        }
+        setExtraTerms(amount, PAYER_REQUESTER);
+        this.extraRequestStatus = ExtraRequestStatus.REQUESTED;
+    }
+
+    /** 보낸 사람이 추가요금 요청을 수락 → 결제 대기 */
+    public void agreeExtraFee() {
+        requireExtraRequested();
+        this.extraRequestStatus = ExtraRequestStatus.AGREED;
+    }
+
+    /** 보낸 사람이 추가요금 요청을 거절 → 금액 조건을 지우고, 받은 사람이 다시 고른다(바로 수락 · 다시 요청 · 거절) */
+    public void declineExtraFee() {
+        requireExtraRequested();
+        setExtraTerms(0, null);
+        this.extraRequestStatus = ExtraRequestStatus.DECLINED;
+    }
+
+    private void requireExtraRequested() {
+        if (status != ExchangeStatus.REQUESTED || extraRequestStatus != ExtraRequestStatus.REQUESTED) {
+            throw ApiException.conflict("NO_EXTRA_REQUEST", "답할 추가요금 요청이 없어요.");
+        }
+    }
+
+    // ───────────── 2026-11-25 운송장 · 배송 · 후기 ─────────────
+
+    /** 성사 직후: 운송장 입력 단계 시작(마감 = 지금 + 기간) */
+    public void startShipping(java.time.Duration window) {
+        this.dealStage = DealStage.SHIPPING;
+        this.shipDeadline = Instant.now().plus(window);
+    }
+
+    /** 두 물건 모두 도착 */
+    public void markCompleted() {
+        this.dealStage = DealStage.COMPLETED;
+        this.completedAt = Instant.now();
+    }
+
+    /** 운송장 입력 기간 만료: 성사된 교환을 취소로 */
+    public void expireShipping(String reason) {
+        if (status != ExchangeStatus.ACCEPTED || dealStage != DealStage.SHIPPING) {
+            throw ApiException.conflict("INVALID_STATUS", "배송 단계의 교환만 만료할 수 있어요.");
+        }
+        this.status = ExchangeStatus.CANCELED;
+        this.closeReason = reason;
+        this.dealStage = DealStage.EXPIRED;
+        this.respondedAt = Instant.now();
+    }
+
+    public boolean isParticipant(long userId) {
+        return isRequestedBy(userId) || isReceivedBy(userId);
+    }
+
+    /** 상대방 번호 */
+    public long otherOf(long userId) {
+        return isRequestedBy(userId) ? targetOwner.getId() : requester.getId();
+    }
+
+    public boolean hasReviewed(long userId) {
+        return isRequestedBy(userId) ? requesterReviewed : ownerReviewed;
+    }
+
+    public void markReviewed(long userId) {
+        if (isRequestedBy(userId)) {
+            requesterReviewed = true;
+        } else {
+            ownerReviewed = true;
+        }
     }
 
     /** 상태 전이의 단일 관문: REQUESTED 가 아니면 409, 맞으면 다음 상태·이유·시각을 기록 */

@@ -371,6 +371,11 @@ public class WalletService {
     }
 
     /** 수수료: 금액 × 5%, 원 단위 반올림 */
+    /** 수수료(토스 주문에서도 같은 규칙) */
+    public long feeOf(long amount) {
+        return fee(amount);
+    }
+
     long fee(long amount) {
         return Math.round(amount * feePercent / 100.0);
     }

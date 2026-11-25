@@ -49,4 +49,7 @@ public interface ExchangeRepository extends JpaRepository<ExchangeRequest, Long>
     /** 받은 요청 중 특정 상태의 개수(대기 중인 받은 요청 수 배지) */
     @Query("select count(e) from ExchangeRequest e where e.targetOwner.id = :userId and e.status = :status")
     long countReceivedWithStatus(@Param("userId") long userId, @Param("status") ExchangeStatus status);
+
+    /** 2026-11-25 운송장 입력 마감이 지난 배송 단계 교환(7일 만료 검사) */
+    List<ExchangeRequest> findByDealStageAndShipDeadlineBefore(DealStage stage, java.time.Instant deadline);
 }

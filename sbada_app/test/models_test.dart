@@ -108,6 +108,46 @@ void main() {
     expect(ex.statusLabel, '수락 대기');
   });
 
+  // 2026-11-25: 추가요금 · 배송 · 후기 칸
+  test('Exchange: 추가요금 · 운송장 · 후기 칸을 읽는다', () {
+    final summary = {'id': 7, 'title': '레고', 'price': 140000, 'status': 'AVAILABLE', 'ownerId': 2};
+    final ex = Exchange.fromJson({
+      'id': 5,
+      'status': 'ACCEPTED',
+      'requester': {'id': 2, 'nickname': '도현', 'region': ''},
+      'targetOwner': {'id': 1, 'nickname': '민지', 'region': ''},
+      'offeredItem': summary,
+      'targetItem': {...summary, 'id': 8, 'title': '에어팟', 'price': 150000, 'ownerId': 1},
+      'priceDiffPercent': -7,
+      'createdAt': '2026-10-20T08:00:00Z',
+      'extraAmount': 10000,
+      'extraDirection': 'I_PAY',
+      'paymentStatus': 'PAID_HELD',
+      'extraRequestStatus': 'AGREED',
+      'dealStage': 'SHIPPING',
+      'shipDeadline': '2026-10-27T08:00:00Z',
+      'shipments': [
+        {'senderId': 2, 'mine': true, 'carrierName': '테스트 택배', 'invoiceMasked': '1234****90',
+         'status': 'IN_TRANSIT', 'level': 3, 'levelLabel': '배송 중'},
+      ],
+    });
+    expect(ex.iPay, isTrue);
+    expect(ex.statusLabel, '배송 중');
+    expect(ex.myShipment?.level, 3);
+    expect(ex.otherShipment, isNull);
+    expect(ex.shipDeadline, isNotNull);
+    final reviews = ReviewList.fromJson({
+      'count': 1,
+      'average': 4.0,
+      'reviews': [
+        {'id': 1, 'rating': 4, 'content': '포장이 꼼꼼했어요', 'createdAt': '2026-10-28T08:00:00Z',
+         'writer': {'id': 2, 'nickname': '도현', 'region': ''}},
+      ],
+    });
+    expect(reviews.average, 4.0);
+    expect(reviews.reviews.single.writer.nickname, '도현');
+  });
+
   test('금액·시간 표시', () {
     expect(formatWon(128000), '128,000원');
     expect(formatWon(1234567), '1,234,567원');

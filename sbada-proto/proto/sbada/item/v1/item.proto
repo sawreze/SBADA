@@ -15,6 +15,8 @@ service ItemService {
   rpc CountItems(CountItemsRequest) returns (CountItemsResponse);
   // 사진 확인(프로필 사진으로 고를 때 '내가 올린 사진인지')
   rpc GetImage(GetImageRequest) returns (ImageInfo);
+  // 2026-11-25 거래 취소(운송장 7일 만료 등): 이 교환으로 거래 완료(TRADED)였던 물건을 다시 교환 가능(AVAILABLE)으로
+  rpc ReopenTrade(ReopenTradeRequest) returns (ReopenTradeResponse);
 }
 
 message GetItemsRequest {
@@ -40,6 +42,15 @@ message GetItemsResponse {
 message CompleteTradeRequest {
   int64 exchange_id = 1;
   repeated int64 item_ids = 2;
+}
+
+message ReopenTradeRequest {
+  int64 exchange_id = 1;
+  repeated int64 item_ids = 2;
+}
+
+message ReopenTradeResponse {
+  int32 reopened = 1; // 다시 교환 가능이 된 물건 수(이미 AVAILABLE · 내려간 물건은 그대로)
 }
 
 message CompleteTradeResponse {

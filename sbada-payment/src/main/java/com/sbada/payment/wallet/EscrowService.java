@@ -40,10 +40,16 @@ public class EscrowService {
     private final WalletTransactionRepository txs;
     private final CoreClient core;
     private final Duration autoRelease;
+    private final org.springframework.context.ApplicationEventPublisher events;
+
+    /** 토스로 결제된 보관금을 환불할 때: TossService 가 받아 토스 결제를 취소한다 */
+    public record TossRefundNeeded(long exchangeId, String reason) {
+    }
 
     public EscrowService(WalletService wallet, EscrowPaymentRepository escrows, WalletTransactionRepository txs,
-                         CoreClient core,
-                         @Value("${sbada.escrow.auto-release-minutes:4320}") long autoReleaseMinutes) {
+                         CoreClient core, org.springframework.context.ApplicationEventPublisher events,
+                         @Value("${sbada.escrow.auto-release-minutes:43200}") long autoReleaseMinutes) {
+        this.events = events;
         this.wallet = wallet;
         this.escrows = escrows;
         this.txs = txs;
@@ -54,11 +60,50 @@ public class EscrowService {
     // ───────────── ① 결제(보관) ─────────────
 
     public WalletDtos.EscrowResult hold(long userId, WalletDtos.EscrowRequest in) {
+        return hold(userId, in, null);
+    }
+
+    /**
+     * 2026-11-25 토스페이먼츠 승인 · 가상계좌 입금이 확인된 뒤 보관(TossService 만 부른다).
+     * method 는 TOSS_CARD · TOSS_VA — 앱이 보낸 값이 아니라 결제 서버가 토스에 확인한 값이다.
+     */
+    public WalletDtos.EscrowResult holdVerifiedExternal(long payerId, long exchangeId, long amount, long payeeId,
+                                                        String method, String memo) {
+        if (!Catalog.TOSS_CARD.equals(method) && !Catalog.TOSS_VA.equals(method)) {
+            throw new IllegalArgumentException("외부 결제 코드가 아니에요: " + method);
+        }
+        return hold(payerId, new WalletDtos.EscrowRequest(exchangeId, amount, method, payeeId, memo), method);
+    }
+
+    /** 결제 조건 확인(토스 주문을 만들 때): 낼 사람이 맞는지, 금액 · 받는 사람. 메인 서버 확인을 끈 테스트에서는 넘겨받은 값 */
+    public record Terms(long payeeId, long amount) {
+    }
+
+    public Terms termsFor(long userId, long exchangeId, Long amount, Long toUserId) {
+        if (!core.verifies()) {
+            if (amount == null || toUserId == null) {
+                throw ApiException.badRequest("PAYEE_REQUIRED", "받는 사람과 금액이 필요해요.");
+            }
+            wallet.checkAmount(amount);
+            return new Terms(toUserId, amount);
+        }
+        CoreClient.ExchangeInfo x = core.findExchange(exchangeId)
+                .orElseThrow(() -> ApiException.notFound("EXCHANGE_NOT_FOUND", "교환을 찾을 수 없습니다."));
+        long payee = resolvePayee(userId, exchangeId, x.extraAmount(), null);
+        return new Terms(payee, x.extraAmount());
+    }
+
+    public boolean alreadyPaid(long exchangeId) {
+        return escrows.existsByExchangeIdAndStatusIn(exchangeId, PAID);
+    }
+
+    private WalletDtos.EscrowResult hold(long userId, WalletDtos.EscrowRequest in, String verifiedMethod) {
         long exchangeId = in.exchangeId();
         long amount = in.amount();
         wallet.checkAmount(amount);
-        String method = wallet.payMethod(in.method());
-        long payee = resolvePayee(userId, exchangeId, amount, in.toUserId()); // 네트워크 호출은 잠금 밖에서
+        String method = verifiedMethod != null ? verifiedMethod : wallet.payMethod(in.method());
+        long payee = verifiedMethod != null && !core.verifies() ? in.toUserId()
+                : resolvePayee(userId, exchangeId, amount, in.toUserId()); // 네트워크 호출은 잠금 밖에서
         if (payee == userId) {
             throw ApiException.badRequest("SELF_PAY", "나에게는 보낼 수 없습니다.");
         }
@@ -175,13 +220,19 @@ public class EscrowService {
             e.refund();
             long payer = e.getPayerId();
             long before = wallet.balance(payer);
-            long after = Catalog.WALLET.equals(e.getMethod()) ? before + e.total() : before; // 낸 수단으로 돌려줌
+            // 낸 수단으로 돌려줌: 지갑 → 지갑, 토스 카드 → 토스 결제 취소(아래 이벤트), 가상계좌 → 지갑(계좌로 되돌리려면 환불 계좌가 필요해서)
+            boolean toWallet = Catalog.WALLET.equals(e.getMethod()) || Catalog.TOSS_VA.equals(e.getMethod());
+            long after = toWallet ? before + e.total() : before;
             txs.save(new WalletTransaction(payer, TxType.ESCROW_REFUND, e.total(), 0, after, e.getMethod(), null,
                     e.getPayeeId(), "교환 추가 금액 환불"));
             Map<String, Object> ref = Map.of("exchangeId", e.getExchangeId());
             wallet.event("ESCROW_REFUNDED", payer, "환불되었어요",
-                    why + " " + WalletService.won(e.total()) + "을 " + Catalog.methodLabel(e.getMethod())
-                            + "(으)로 돌려드렸어요. (시연)", e.getId(), ref);
+                    why + " " + WalletService.won(e.total()) + "을 "
+                            + (toWallet ? "쓰바다 지갑" : Catalog.methodLabel(e.getMethod())) + "(으)로 돌려드렸어요."
+                            + (Catalog.TOSS_CARD.equals(e.getMethod()) ? " (토스 테스트 결제 취소)" : " (시연)"), e.getId(), ref);
+            if (Catalog.TOSS_CARD.equals(e.getMethod())) {
+                events.publishEvent(new TossRefundNeeded(e.getExchangeId(), why));
+            }
             wallet.event("ESCROW_REFUNDED", e.getPayeeId(), "추가 금액 결제가 취소되었어요",
                     why + " 상대가 낸 " + WalletService.won(e.getAmount()) + "은 환불되었어요. (시연)", e.getId(), ref);
             return WalletDtos.EscrowView.from(e, null);

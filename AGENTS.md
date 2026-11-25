@@ -13,7 +13,7 @@
 - 결제 · 지갑은 **시연용**이다. 실제 PG · 은행 API 를 호출하는 코드를 넣지 않는다(실제 돈 이동 금지).
 - 기존 스타일(파일 상단 한국어 설명 주석, `// 2026-xx-xx 사용자 요청: …` 변경 메모)을 따른다.
 - 바꾼 기능에는 테스트를 같이 추가/수정한다. DB 를 바꾸면 Flyway 마이그레이션 `V{n}__설명.sql` 을 새로 만들고
-  `sbada-server/src/test/java/com/sbada/FlywayMigrationTest.java` 의 버전 개수도 올린다(현재 메인 V19 · 물품 V1 · 결제 V2 까지).
+  `sbada-server/src/test/java/com/sbada/FlywayMigrationTest.java` 의 버전 개수도 올린다(현재 메인 V21 · 물품 V1 · 결제 V3 까지).
   각 서버는 자기 DB 만 바꾼다(물품 표는 `sbada-item`, 지갑 표는 `sbada-payment`).
 
 ## 1. 구조

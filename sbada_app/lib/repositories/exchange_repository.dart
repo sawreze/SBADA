@@ -32,4 +32,44 @@ class ExchangeRepository {
 
   Future<Exchange> cancel(int id) async =>
       Exchange.fromJson(await api.post('/api/exchanges/$id/cancel') as Map<String, dynamic>);
+
+  // ───── 2026-11-25 수락 → 바로 수락 / 추가요금 요청 · 운송장 · 후기 ─────
+
+  /// 받은 사람: 추가요금 요청(내 물건이 더 쌀 때만)
+  Future<Exchange> requestExtraFee(int id, int amount) async => Exchange.fromJson(
+      await api.post('/api/exchanges/$id/extra-request', body: {'amount': amount}) as Map<String, dynamic>);
+
+  /// 보낸 사람: 추가요금 요청 수락(→ 결제) · 거절(→ 받은 사람이 다시 선택)
+  Future<Exchange> agreeExtraFee(int id) async =>
+      Exchange.fromJson(await api.post('/api/exchanges/$id/extra-request/accept') as Map<String, dynamic>);
+
+  Future<Exchange> declineExtraFee(int id) async =>
+      Exchange.fromJson(await api.post('/api/exchanges/$id/extra-request/decline') as Map<String, dynamic>);
+
+  /// 택배사 목록(맨 앞 TEST = 시연용 테스트 택배)
+  Future<List<Carrier>> carriers() async {
+    final json = await api.get('/api/shipping/carriers', auth: false) as Map<String, dynamic>;
+    return (json['carriers'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map((c) => Carrier('${c['code']}', '${c['name']}'))
+        .toList();
+  }
+
+  /// 내가 보낸 물건의 운송장 입력(택배사 접수가 확인되면 성공, 아니면 400 INVALID_INVOICE)
+  Future<Exchange> submitShipment(int id, {required String carrierCode, required String invoiceNo}) async =>
+      Exchange.fromJson(await api.post('/api/exchanges/$id/shipment',
+          body: {'carrierCode': carrierCode, 'invoiceNo': invoiceNo}) as Map<String, dynamic>);
+
+  /// 배송 현황 지금 다시 묻기
+  Future<Exchange> refreshShipment(int id) async =>
+      Exchange.fromJson(await api.post('/api/exchanges/$id/shipment/refresh') as Map<String, dynamic>);
+
+  /// 거래 후기(두 물건 도착 뒤 한 번)
+  Future<void> writeReview(int id, {required int rating, String? content}) async {
+    await api.post('/api/exchanges/$id/review', body: {'rating': rating, 'content': content});
+  }
+
+  /// 다른 사람 프로필의 후기 목록
+  Future<ReviewList> reviewsOf(int userId) async =>
+      ReviewList.fromJson(await api.get('/api/users/$userId/reviews', auth: false) as Map<String, dynamic>);
 }

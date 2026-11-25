@@ -105,6 +105,21 @@ public class FakeServices {
             }
 
             @Override
+            public synchronized void reopenTrade(com.sbada.grpc.item.v1.ReopenTradeRequest request,
+                                                 StreamObserver<com.sbada.grpc.item.v1.ReopenTradeResponse> out) {
+                int n = 0;
+                for (long id : request.getItemIdsList()) {
+                    FakeItem i = ITEMS.get(id);
+                    if (i != null && "TRADED".equals(i.status())) {
+                        setStatus(id, "AVAILABLE");
+                        n++;
+                    }
+                }
+                out.onNext(com.sbada.grpc.item.v1.ReopenTradeResponse.newBuilder().setReopened(n).build());
+                out.onCompleted();
+            }
+
+            @Override
             public void countItems(CountItemsRequest request, StreamObserver<CountItemsResponse> out) {
                 out.onNext(CountItemsResponse.newBuilder().setTotal(ITEMS.size()).build());
                 out.onCompleted();

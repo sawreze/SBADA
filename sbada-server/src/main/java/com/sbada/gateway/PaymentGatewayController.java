@@ -46,7 +46,8 @@ public class PaymentGatewayController {
     public ResponseEntity<byte[]> forward(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
         String query = request.getQueryString();
         URI target = URI.create(paymentUrl + request.getRequestURI() + (query == null ? "" : "?" + query));
-        HttpRequest.Builder b = HttpRequest.newBuilder(target).timeout(Duration.ofSeconds(10))
+        // 토스 승인 · 조회는 외부 호출이라 조금 더 기다린다(2026-11-25)
+        HttpRequest.Builder b = HttpRequest.newBuilder(target).timeout(Duration.ofSeconds(request.getRequestURI().startsWith("/api/payments/toss") ? 30 : 10))
                 .method(request.getMethod(), body == null || body.length == 0
                         ? HttpRequest.BodyPublishers.noBody()
                         : HttpRequest.BodyPublishers.ofByteArray(body));

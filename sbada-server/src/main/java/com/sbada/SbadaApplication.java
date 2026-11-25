@@ -2,6 +2,7 @@ package com.sbada;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 스바다 서버 진입점(main 메서드가 있는 클래스).
@@ -20,7 +21,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *  - 패키지 구조는 '기능별(도메인별)'로 나눴다: 각 패키지 안에 Controller(요청 받기) → Service(업무 규칙)
  *    → Repository(DB) → Entity(테이블과 연결된 클래스) → Dtos(요청·응답 JSON 모양) 가 함께 있다.
  */
+// 2026-11-25: @Scheduled 작업(허브로 이벤트 보내기 OutboxRelay · 배송 현황 조회 · 운송장 7일 만료)을 켠다.
+//  (빠져 있어서 메인 서버의 교환 · 프로필 이벤트가 허브로 나가지 않던 문제 수정)
 @SpringBootApplication
+@EnableScheduling
 public class SbadaApplication {
 
     /**

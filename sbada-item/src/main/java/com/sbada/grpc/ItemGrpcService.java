@@ -20,6 +20,8 @@ import com.sbada.grpc.item.v1.GetItemsResponse;
 import com.sbada.grpc.item.v1.ImageInfo;
 import com.sbada.grpc.item.v1.ItemInfo;
 import com.sbada.grpc.item.v1.ItemServiceGrpc;
+import com.sbada.grpc.item.v1.ReopenTradeRequest;
+import com.sbada.grpc.item.v1.ReopenTradeResponse;
 import com.sbada.image.ItemImage;
 import com.sbada.image.ItemImageRepository;
 import com.sbada.item.Item;
@@ -34,6 +36,7 @@ import io.grpc.stub.StreamObserver;
  *  CompleteTrade : 교환 성사 → 두 물건을 한 트랜잭션에서 TRADED 로. 하나라도 안 되면 아무것도 안 바꾸고 ok=false
  *  CountItems    : 상태 화면용 물건 수
  *  GetImage      : 프로필 사진으로 고른 사진이 내 것인지 확인
+ *  ReopenTrade   : 거래 취소(운송장 7일 만료 등) → 거래 완료였던 물건을 다시 교환 가능으로(2026-11-25)
  */
 @GrpcService
 public class ItemGrpcService extends ItemServiceGrpc.ItemServiceImplBase {
@@ -101,6 +104,24 @@ public class ItemGrpcService extends ItemServiceGrpc.ItemServiceImplBase {
             return CompleteTradeResponse.newBuilder().setOk(true).build();
         });
         out.onNext(res);
+        out.onCompleted();
+    }
+
+    @Override
+    public void reopenTrade(ReopenTradeRequest request, StreamObserver<ReopenTradeResponse> out) {
+        Integer n = tx.execute(s -> {
+            int count = 0;
+            for (Item i : items.findAllById(new LinkedHashSet<>(request.getItemIdsList()))) {
+                if (i.reopenAfterCanceledTrade()) {
+                    count++;
+                    events.publish(Topics.ITEM, i.getId(), "ITEM_STATUS_CHANGED", Map.of("itemId", i.getId(),
+                            "ownerId", i.getOwner().getId(), "title", i.getTitle(), "status", ItemStatus.AVAILABLE.name(),
+                            "exchangeId", request.getExchangeId()));
+                }
+            }
+            return count;
+        });
+        out.onNext(ReopenTradeResponse.newBuilder().setReopened(n == null ? 0 : n).build());
         out.onCompleted();
     }
 

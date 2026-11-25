@@ -209,6 +209,15 @@ public class Item {
     }
 
     /** 콘텐츠 검사에 걸림 → 보류. 이미 교환이 끝났거나 내린 물건은 그대로 둔다. */
+    /** 2026-11-25 거래가 취소되면(운송장 7일 만료 등) 거래 완료였던 물건을 다시 교환 가능으로. 바꿨으면 true */
+    public boolean reopenAfterCanceledTrade() {
+        if (status != ItemStatus.TRADED) {
+            return false;
+        }
+        this.status = ItemStatus.AVAILABLE;
+        return true;
+    }
+
     public void hold(String reason) {
         if (status != ItemStatus.AVAILABLE) {
             return;

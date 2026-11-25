@@ -197,6 +197,14 @@ public class ItemService {
         return a;
     }
 
+    /** 2026-11-25 다른 사람 프로필: 교환 가능 · 거래 완료 물건만(숨김 · 보류는 주인만 본다) */
+    @Transactional(readOnly = true)
+    public ItemDtos.ItemList ofUser(long userId, int limit) {
+        return new ItemDtos.ItemList(items.findMine(userId, ItemStatus.HIDDEN).stream()
+                .filter(i -> i.getStatus() == ItemStatus.AVAILABLE || i.getStatus() == ItemStatus.TRADED)
+                .limit(Math.max(1, Math.min(limit, 100))).map(ItemDtos.ItemView::from).toList());
+    }
+
     /** 내 물건(GET /api/me/items) — 내린(HIDDEN) 물건만 빼고 */
     @Transactional(readOnly = true)
     public ItemDtos.ItemList mine(long userId) {

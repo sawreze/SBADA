@@ -87,6 +87,16 @@ public class ItemCatalog {
         }
     }
 
+    /** 2026-11-25 거래 취소(운송장 7일 만료 등): 이 교환으로 거래 완료였던 물건을 다시 교환 가능으로. 다시 연 물건 수 */
+    public int reopenTrade(long exchangeId, long... itemIds) {
+        com.sbada.grpc.item.v1.ReopenTradeRequest.Builder b =
+                com.sbada.grpc.item.v1.ReopenTradeRequest.newBuilder().setExchangeId(exchangeId);
+        for (long id : itemIds) {
+            b.addItemIds(id);
+        }
+        return callOrDown(() -> call().reopenTrade(b.build())).getReopened();
+    }
+
     /** 상태 화면용 물건 수(-1 = 물품 서버 꺼짐) */
     public long count() {
         try {

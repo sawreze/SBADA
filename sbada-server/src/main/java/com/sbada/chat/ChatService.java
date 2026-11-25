@@ -135,7 +135,15 @@ public class ChatService {
         Map<Long, ExchangeRequest> ex = exchange == null ? Map.of() : Map.of(exchange.getId(), exchange);
         Map<Long, ItemRef> refs = exchange == null ? Map.of()
                 : items.get(List.of(exchange.getOfferedItemId(), exchange.getTargetItemId()));
-        broadcast(room, toMessageView(saved, ex, refs, null), null);
+        // 2026-11-25: 교환 카드는 보는 사람마다 다르다(추가요금 요청 가능 여부 · 내 운송장 · 후기 여부) → 각자용으로 보낸다
+        long ownerId = room.getOwner().getId();
+        long partnerId = room.getPartner().getId();
+        ChatDtos.MessageView forOwner = toMessageView(saved, ex, refs, ownerId);
+        ChatDtos.MessageView forPartner = toMessageView(saved, ex, refs, partnerId);
+        AfterCommit.run(() -> {
+            hub.sendToUser(ownerId, Map.of("type", "chat.message", "message", forOwner));
+            hub.sendToUser(partnerId, Map.of("type", "chat.message", "message", forPartner));
+        });
     }
 
     /**

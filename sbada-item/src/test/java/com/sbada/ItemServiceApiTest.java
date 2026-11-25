@@ -195,6 +195,10 @@ class ItemServiceApiTest {
                 .andExpect(jsonPath("$.data.myLikes[0].id").value((int) itemId));
         graphql("{ myItems { id } }", null)
                 .andExpect(jsonPath("$.errors[0].extensions.code").value("AUTH_REQUIRED"));
+        // 2026-11-25 다른 사람 프로필: 로그인 없이도 그 사람의 물건 목록
+        graphql("{ userItems(userId: %d) { id title status } }".formatted(seller), null)
+                .andExpect(jsonPath("$.errors").doesNotExist())
+                .andExpect(jsonPath("$.data.userItems[0].id").value((int) itemId));
 
         List<OutboxEvent> events = outbox.findAll();
         assertThat(events).anySatisfy(e -> {

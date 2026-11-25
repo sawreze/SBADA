@@ -9,10 +9,14 @@ import '../repositories/wallet_repository.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/deal_card.dart';
+import '../widgets/deal_sheets.dart';
+import '../widgets/expand_route.dart';
 import '../widgets/exchange_card.dart';
 import '../widgets/my_item_picker.dart';
 import '../widgets/net_image.dart';
 import '../widgets/wallet_sheets.dart';
+import 'user_profile_screen.dart';
 
 /// 채팅방. 보내기·받기는 WebSocket, 지난 메시지와 끊겼을 때의 보내기는 REST.
 ///   보낼 때: 화면에 '보내는 중' 말풍선을 먼저 그리고(clientMsgId), 서버가 같은 clientMsgId 로
@@ -212,6 +216,41 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  /// 같은 교환이 붙은 메시지(제안 카드 · 거래 카드)를 한꺼번에 바꾼다
+  void _applyExchange(Exchange updated) {
+    if (!mounted) return;
+    setState(() {
+      for (var i = 0; i < _messages.length; i++) {
+        if (_messages[i].exchange?.id == updated.id) _messages[i] = _messages[i].copyWithExchange(updated);
+      }
+    });
+  }
+
+  /// 2026-11-25: 받은 사람의 '수락' → 바로 수락 / 추가요금 요청
+  Future<void> _acceptChoice(Exchange ex) async {
+    setState(() => _busyExchange = ex.id);
+    try {
+      final updated = await showAcceptChoice(context, widget.services, ex);
+      if (updated != null) {
+        _applyExchange(updated);
+        widget.services.itemsChanged.value++;
+      }
+    } finally {
+      if (mounted) setState(() => _busyExchange = null);
+    }
+  }
+
+  /// 교환마다 맨 마지막 카드 메시지(추가요금 · 배송 · 교환 안내) 번호 — 이 한 장만 거래 카드로 그린다
+  Map<int, int> _dealAnchors() {
+    final anchors = <int, int>{};
+    for (final m in _messages) {
+      final ex = m.exchange;
+      if (ex == null || m.type == 'PROPOSAL' || m.type == 'TEXT') continue;
+      anchors[ex.id] = m.id;
+    }
+    return anchors;
+  }
+
   Future<void> _respond(Exchange ex, Future<Exchange> Function(int id) action) async {
     setState(() => _busyExchange = ex.id);
     try {
@@ -242,9 +281,25 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   @override
   Widget build(BuildContext context) {
     final room = _room;
+    final anchors = _dealAnchors();
     return Scaffold(
       appBar: AppBar(
-        title: Text(room?.partner.nickname ?? '채팅'),
+        // 2026-11-25: 상대 이름을 누르면 그 사람의 물건 · 거래 후기
+        title: room == null
+            ? const Text('채팅')
+            : InkWell(
+                key: const ValueKey('chat-partner-profile'),
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => Navigator.of(context).push(appRoute<void>(
+                    builder: (_) => UserProfileScreen(services: widget.services, user: room.partner))),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Flexible(child: Text(room.partner.nickname, overflow: TextOverflow.ellipsis)),
+                    Icon(Icons.chevron_right_rounded, color: Sb.text3),
+                  ]),
+                ),
+              ),
         actions: [
           // 교환 추가 요금(시연): 금액 + 수수료 5%(보내는 사람 부담)를 결제 → 상대 지갑으로
           if (room != null)
@@ -275,7 +330,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       controller: _scroll,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       itemCount: _messages.length,
-                      itemBuilder: (context, i) => _bubble(_messages[i]),
+                      itemBuilder: (context, i) => _bubble(_messages[i], anchors),
                     ),
                   ),
                   _composer(),
@@ -308,12 +363,24 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 
-  Widget _bubble(ChatMessage m) {
-    if (m.type == 'SYSTEM') {
-      return Padding(
+  Widget _bubble(ChatMessage m, Map<int, int> anchors) {
+    // 안내 · 추가요금 · 배송 메시지: 한 줄 안내 + (그 교환의 마지막 카드면) 거래 카드
+    if (m.type == 'SYSTEM' || m.type == 'EXTRA_REQUEST' || m.type == 'SHIPPING') {
+      final ex = m.exchange;
+      final pill = Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Center(child: Pill(m.content, color: Sb.bg, textColor: Sb.text2)),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(m.content, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, height: 1.45, color: Sb.text2)),
+          ),
+        ),
       );
+      if (ex == null || anchors[ex.id] != m.id || !hasDealFlow(ex)) return pill;
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        pill,
+        DealCard(services: widget.services, exchange: ex, onChanged: _applyExchange),
+      ]);
     }
     if (m.type == 'PROPOSAL' && m.exchange != null) {
       final ex = m.exchange!;
@@ -324,7 +391,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           myId: _myId,
           compact: true,
           busy: _busyExchange == ex.id,
-          onAccept: () => _respond(ex, widget.services.exchanges.accept),
+          onAccept: () => _acceptChoice(ex),
           onReject: () => _respond(ex, widget.services.exchanges.reject),
           onCancel: () => _respond(ex, widget.services.exchanges.cancel),
         ),

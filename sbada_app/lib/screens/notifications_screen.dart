@@ -9,6 +9,7 @@ import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../util/format.dart';
 import '../widgets/common.dart';
+import '../widgets/deal_sheets.dart';
 import '../widgets/exchange_card.dart';
 import 'chat_room_screen.dart';
 import 'item_detail_screen.dart';
@@ -136,7 +137,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       exchange: ex,
       myId: s.session.user?.id ?? -1,
       busy: _busyId == ex.id,
-      onAccept: () => _act(ex, s.exchanges.accept, '🎉 교환이 성사되었어요! 채팅으로 약속을 잡아 보세요.', after: closeSheet),
+      // 2026-11-25: 수락 → 바로 수락 / 추가요금 요청 중에서 고른다
+      onAccept: () async {
+        final updated = await showAcceptChoice(context, s, ex);
+        if (updated == null || !mounted) return;
+        s.itemsChanged.value++;
+        closeSheet?.call();
+        setState(_load);
+      },
       onReject: () => _act(ex, s.exchanges.reject, '요청을 거절했어요.', after: closeSheet),
       onCancel: () => _act(ex, s.exchanges.cancel, '요청을 취소했어요.', after: closeSheet),
       onOpenChat: ex.chatRoomId == null

@@ -191,4 +191,29 @@ public class ExchangeController {
     public ExchangeDtos.ExchangeView refundExtra(@PathVariable long id, Authentication auth) {
         return service.refundExtra(id, (Long) auth.getPrincipal());
     }
+
+    // ───── 2026-11-25 사용자 요청: 수락 → 바로 수락(/accept) 또는 추가요금 요청 ─────
+
+    /**
+     * ■ 추가요금 요청   POST /api/exchanges/{id}/extra-request   (🔒 받은 사람)   {"amount":10000}
+     *   물건 가격이 더 낮은 쪽(받은 사람)만 더 높은 쪽(보낸 사람)에게 요청할 수 있다. 채팅에 요청 카드가 뜬다.
+     *   오류: 403 NOT_RECEIVER · 409 EXTRA_NOT_ALLOWED / EXTRA_ALREADY_REQUESTED · 400 INVALID_EXTRA_AMOUNT
+     */
+    @PostMapping("/{id}/extra-request")
+    public ExchangeDtos.ExchangeView requestExtraFee(@PathVariable long id, @Valid @RequestBody ExchangeDtos.ExtraFeeRequest body,
+                                                     Authentication auth) {
+        return service.requestExtraFee(id, (Long) auth.getPrincipal(), body.amount());
+    }
+
+    /** ■ 추가요금 요청 수락   POST /api/exchanges/{id}/extra-request/accept   (🔒 보낸 사람) → 결제창으로(결제 확인되면 교환 진행) */
+    @PostMapping("/{id}/extra-request/accept")
+    public ExchangeDtos.ExchangeView agreeExtraFee(@PathVariable long id, Authentication auth) {
+        return service.agreeExtraFee(id, (Long) auth.getPrincipal());
+    }
+
+    /** ■ 추가요금 요청 거절   POST /api/exchanges/{id}/extra-request/decline   (🔒 보낸 사람) → 받은 사람이 다시 선택 */
+    @PostMapping("/{id}/extra-request/decline")
+    public ExchangeDtos.ExchangeView declineExtraFee(@PathVariable long id, Authentication auth) {
+        return service.declineExtraFee(id, (Long) auth.getPrincipal());
+    }
 }

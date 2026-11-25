@@ -82,6 +82,11 @@ class ItemRepository {
   /// 내 물건(GraphQL myItems, 내린 물건 제외)
   Future<List<Item>> mine() async => _items((await _gql('{ myItems { $_listFields } }'))['myItems']);
 
+  /// 2026-11-25: 다른 사람 프로필의 물건 목록(GraphQL userItems, 공개 · 내린 물건 제외)
+  Future<List<Item>> userItems(int userId, {int limit = 50}) async => _items((await _gql(
+          'query(\$userId: Int!, \$limit: Int) { userItems(userId: \$userId, limit: \$limit) { $_listFields } }',
+          {'userId': userId, 'limit': limit}))['userItems']);
+
   /// 동네지도 핀의 매치도: 보이는 물건들만 홈 추천과 같은 식으로 점수(GET /api/feed/scores?ids=). {물건 번호: 점수}
   Future<Map<int, int>> scores(List<int> ids) async {
     if (ids.isEmpty) return const {};

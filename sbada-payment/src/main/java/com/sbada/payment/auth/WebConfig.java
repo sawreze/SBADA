@@ -24,7 +24,8 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(auth).addPathPatterns("/api/**").excludePathPatterns("/api/payment/health");
+        registry.addInterceptor(auth).addPathPatterns("/api/**").excludePathPatterns("/api/payment/health",
+                "/api/payments/toss/webhook"); // 토스 웹훅은 로그인 없이 오고, 본문을 믿지 않고 토스에 다시 조회한다
     }
 
     @Override
