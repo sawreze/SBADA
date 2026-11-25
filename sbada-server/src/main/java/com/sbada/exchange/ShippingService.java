@@ -119,6 +119,9 @@ public class ShippingService {
         }
         exchangeService.postCard(request, ChatMessage.Type.SHIPPING, String.format("🚚 %s님이 운송장을 등록했어요 · %s %s — %s",
                 me.getNickname(), carrierName, s.maskedInvoice(), TrackResult.levelLabel(s.getLevel())));
+        if (request.getShipments().size() < 2 && !easy) {
+            exchangeService.postSystem(request, "📦 상대도 운송장을 입력하면 배송 현황 조회가 시작돼요.");
+        }
         notifications.notify(request.otherOf(userId), NotificationType.DELIVERY, "상대가 운송장을 입력했어요",
                 String.format("%s님이 보낸 물건: %s %s", me.getNickname(), carrierName, s.maskedInvoice()),
                 "EXCHANGE", request.getId());
@@ -134,6 +137,12 @@ public class ShippingService {
                     other.getNickname(), carrierName, auto.maskedInvoice()));
         }
         if (request.getShipments().size() == 2) {
+            // 2026-11-25 사용자 요청: 배송은 두 사람 모두 운송장을 입력해야 시작 → 먼저 입력한 쪽도 지금부터 단계를 센다
+            for (Shipment sh : request.getShipments()) {
+                if (sh != s && !sh.isDelivered() && TrackingService.TEST_CARRIER.equals(sh.getCarrierCode())) {
+                    sh.restartTracking();
+                }
+            }
             exchangeService.postSystem(request, easy
                     ? "📮 두 분 모두 운송장을 입력했어요. (시연) 약 30초 동안 배송 단계가 올라가고 배송 완료 · 정산까지 이어져요."
                     : "📮 두 분 모두 운송장을 입력했어요. 배송 현황이 바뀌면 채팅과 알림으로 알려 드릴게요.");
@@ -149,6 +158,9 @@ public class ShippingService {
         ExchangeRequest request = exchangeService.require(exchangeId);
         if (!request.isParticipant(userId)) {
             throw ApiException.forbidden("NOT_PARTICIPANT", "교환 당사자만 배송 현황을 볼 수 있어요.");
+        }
+        if (request.getShipments().size() < 2) { // 두 사람 모두 입력해야 배송이 시작된다
+            return exchangeService.view(request, userId);
         }
         boolean changed = false;
         for (Shipment s : request.getShipments()) {
@@ -231,6 +243,7 @@ public class ShippingService {
             }
         }
         List<Long> due = tx.execute(s -> shipments.findOpen(DealStage.SHIPPING).stream()
+                .filter(sh -> sh.getExchange().getShipments().size() == 2) // 두 사람 모두 입력한 교환만
                 .filter(this::isDue).map(sh -> sh.getExchange().getId()).distinct().toList());
         for (Long id : due == null ? List.<Long>of() : due) {
             try {

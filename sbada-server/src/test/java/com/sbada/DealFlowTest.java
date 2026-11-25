@@ -280,4 +280,22 @@ class DealFlowTest {
         assertThat(FakeServices.ESCROW_CALLS.stream().anyMatch(c -> c.startsWith("refund " + d.exchangeId()))).isTrue();
         assertThat(FakeServices.status(d.offered())).isEqualTo("AVAILABLE");
     }
+
+    /** 배송은 두 사람 모두 운송장을 입력해야 시작된다(한 사람만 입력하면 시간이 지나도 배송 완료가 되지 않음) */
+    @Test
+    void deliveryStartsOnlyAfterBothInvoices() throws Exception {
+        Deal d = newDeal("dfi", 80_000, 50_000);
+        postJson(d.owner(), "/api/exchanges/" + d.exchangeId() + "/accept", null).andExpect(status().isOk());
+        postJson(d.owner(), "/api/exchanges/" + d.exchangeId() + "/shipment", "{\"carrierCode\":\"TEST\",\"invoiceNo\":\"5151515151\"}").andExpect(status().isOk());
+        ageShipments(d.exchangeId());
+        shipping.runOnce();
+        view(d.owner(), d.exchangeId()).andExpect(jsonPath("$.shipments[0].status").value("VERIFIED"))
+                .andExpect(jsonPath("$.dealStage").value("SHIPPING"));
+        // 상대가 입력한 순간부터 단계를 센다 → 둘 다 10분 지난 것으로 돌리면 완료
+        postJson(d.requester(), "/api/exchanges/" + d.exchangeId() + "/shipment", "{\"carrierCode\":\"TEST\",\"invoiceNo\":\"6161616161\"}").andExpect(status().isOk());
+        view(d.owner(), d.exchangeId()).andExpect(jsonPath("$.shipments[0].status").value("VERIFIED"));
+        ageShipments(d.exchangeId());
+        shipping.runOnce();
+        view(d.owner(), d.exchangeId()).andExpect(jsonPath("$.dealStage").value("COMPLETED"));
+    }
 }

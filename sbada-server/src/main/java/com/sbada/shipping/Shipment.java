@@ -120,6 +120,12 @@ public class Shipment {
         return changed;
     }
 
+    /** 2026-11-25: 두 사람 운송장이 모두 들어온 순간부터 배송 조회를 시작한다(테스트 택배는 단계를 이 시각부터 센다) */
+    public void restartTracking() {
+        this.verifiedAt = Instant.now();
+        this.checkedAt = Instant.now();
+    }
+
     /** 시연 도구(dev 전용): 등록 시각을 앞당겨 테스트 택배 단계가 바로 끝까지 가게 한다 */
     public void rewindForDemo(java.time.Duration d) {
         this.verifiedAt = verifiedAt.minus(d);

@@ -141,6 +141,11 @@ class _DealCardState extends State<DealCard> {
         _shipRow('내가 보낸 물건', mine),
         const SizedBox(height: 8),
         _shipRow('$_otherName님이 보낸 물건', other),
+        if ((mine == null) != (other == null)) ...[
+          const SizedBox(height: 8),
+          Text(mine == null ? '내 운송장을 입력하면 두 물건의 배송이 함께 시작돼요.' : '$_otherName님도 운송장을 입력하면 배송이 시작돼요.',
+              style: TextStyle(fontSize: 13, color: Sb.text2, height: 1.4)),
+        ],
         const SizedBox(height: 12),
         if (mine == null)
           FilledButton.icon(
