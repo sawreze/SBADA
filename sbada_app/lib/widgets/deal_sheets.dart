@@ -187,10 +187,12 @@ Future<void> showDealPaySheet(BuildContext context, AppServices services, Exchan
     cfg = null;
   }
   if (!context.mounted) return;
+  final demo = await services.exchanges.demoMode();
+  if (!context.mounted) return;
   final fee = (e.extraAmount * 5 / 100).round();
   final action = await _sheet<String>(
     context,
-    (c) => _PayChooser(amount: e.extraAmount, fee: fee, tossEnabled: cfg?.enabled ?? false),
+    (c) => _PayChooser(amount: e.extraAmount, fee: fee, tossEnabled: cfg?.enabled ?? false, demo: demo),
   );
   if (action == null || !context.mounted) return;
   try {
@@ -209,11 +211,14 @@ Future<void> showDealPaySheet(BuildContext context, AppServices services, Exchan
 }
 
 class _PayChooser extends StatefulWidget {
-  const _PayChooser({required this.amount, required this.fee, required this.tossEnabled});
+  const _PayChooser({required this.amount, required this.fee, required this.tossEnabled, this.demo = false});
 
   final int amount;
   final int fee;
   final bool tossEnabled;
+
+  /// 시연 모드: 카드 번호 입력 없이 바로 끝나는 '시연 결제'를 맨 위에
+  final bool demo;
 
   @override
   State<_PayChooser> createState() => _PayChooserState();
@@ -230,6 +235,15 @@ class _PayChooserState extends State<_PayChooser> {
       _title('추가요금 결제', '${formatWon(widget.amount)} + 수수료 ${formatWon(widget.fee)} = ${formatWon(total)}\n'
           '두 물건이 모두 도착하면 상대에게 전달되고, 거래가 취소되면 전액 환불돼요.'),
       if (!_methods) ...[
+        if (widget.demo && widget.tossEnabled)
+          _Choice(
+            key: const ValueKey('pay-demo-quick'),
+            icon: Icons.flash_on_rounded,
+            title: '시연 결제 (바로 결제)',
+            badge: '실제 돈 X',
+            subtitle: '입력 없이 결제된 것으로 처리해요. 교환이 바로 진행돼요.',
+            onTap: () => Navigator.pop(context, 'demo'),
+          ),
         _Choice(
           key: const ValueKey('pay-va'),
           icon: Icons.account_balance_rounded,
@@ -362,23 +376,28 @@ Future<Exchange?> showShipmentSheet(BuildContext context, AppServices services, 
     if (context.mounted) showSnack(context, err.message, error: true);
     return null;
   }
+  final demo = await services.exchanges.demoMode();
   if (!context.mounted || carriers.isEmpty) return null;
-  return _sheet<Exchange>(context, (c) => _ShipmentForm(services: services, exchange: e, carriers: carriers));
+  return _sheet<Exchange>(context, (c) => _ShipmentForm(services: services, exchange: e, carriers: carriers, demo: demo));
 }
 
 class _ShipmentForm extends StatefulWidget {
-  const _ShipmentForm({required this.services, required this.exchange, required this.carriers});
+  const _ShipmentForm({required this.services, required this.exchange, required this.carriers, this.demo = false});
 
   final AppServices services;
   final Exchange exchange;
   final List<Carrier> carriers;
+
+  /// 시연 모드: 테스트 택배 + 번호를 미리 채움(누르기만 하면 상대 운송장까지 자동, 약 30초 뒤 배송 완료 · 정산)
+  final bool demo;
 
   @override
   State<_ShipmentForm> createState() => _ShipmentFormState();
 }
 
 class _ShipmentFormState extends State<_ShipmentForm> {
-  final _invoice = TextEditingController();
+  late final _invoice = TextEditingController(
+      text: widget.demo ? '${DateTime.now().millisecondsSinceEpoch % 1000000000000}'.padLeft(12, '7') : '');
   late String _carrier = widget.carriers.first.code;
   String? _error;
   bool _busy = false;
@@ -392,7 +411,7 @@ class _ShipmentFormState extends State<_ShipmentForm> {
   Future<void> _submit() async {
     if (_busy) return;
     final no = _invoice.text.replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
-    if (no.length < 8) {
+    if (no.isEmpty || (!widget.demo && no.length < 8)) {
       setState(() => _error = '운송장 번호를 다시 입력해 주세요. (숫자 8자리 이상)');
       return;
     }
@@ -441,7 +460,11 @@ class _ShipmentFormState extends State<_ShipmentForm> {
       ),
       if (_carrier == 'TEST') ...[
         const SizedBox(height: 8),
-        Text('시연용 테스트 택배는 등록 뒤 1분마다 단계가 올라가 약 4분 뒤 배송 완료가 돼요.', style: sbCaption),
+        Text(
+            widget.demo
+                ? '시연 모드: 번호가 미리 채워져 있어요. 그대로 등록하면 상대 운송장도 자동으로 들어가고, 약 30초 동안 배송 단계가 올라가 배송 완료 · 정산까지 이어져요.'
+                : '시연용 테스트 택배는 등록 뒤 1분마다 단계가 올라가 약 4분 뒤 배송 완료가 돼요.',
+            style: sbCaption),
       ],
       const SizedBox(height: 16),
       FilledButton(
@@ -469,16 +492,20 @@ String formatShipDeadline(DateTime t) => _deadline(t);
 
 /// 별점 1~5 + 300자. 쓰면 true
 Future<bool> showReviewSheet(BuildContext context, AppServices services, Exchange e, String otherNickname) async {
-  final ok = await _sheet<bool>(context, (c) => _ReviewForm(services: services, exchange: e, otherNickname: otherNickname));
+  final demo = await services.exchanges.demoMode();
+  if (!context.mounted) return false;
+  final ok = await _sheet<bool>(
+      context, (c) => _ReviewForm(services: services, exchange: e, otherNickname: otherNickname, demo: demo));
   return ok == true;
 }
 
 class _ReviewForm extends StatefulWidget {
-  const _ReviewForm({required this.services, required this.exchange, required this.otherNickname});
+  const _ReviewForm({required this.services, required this.exchange, required this.otherNickname, this.demo = false});
 
   final AppServices services;
   final Exchange exchange;
   final String otherNickname;
+  final bool demo;
 
   @override
   State<_ReviewForm> createState() => _ReviewFormState();
@@ -486,7 +513,7 @@ class _ReviewForm extends StatefulWidget {
 
 class _ReviewFormState extends State<_ReviewForm> {
   int _rating = 5;
-  final _text = TextEditingController();
+  late final _text = TextEditingController(text: widget.demo ? '약속을 잘 지켜 주셨고 물건 상태도 설명 그대로예요. 또 거래하고 싶어요!' : '');
   bool _busy = false;
 
   @override

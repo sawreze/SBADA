@@ -47,6 +47,19 @@ class ExchangeRepository {
       Exchange.fromJson(await api.post('/api/exchanges/$id/extra-request/decline') as Map<String, dynamic>);
 
   /// 택배사 목록(맨 앞 TEST = 시연용 테스트 택배)
+  static bool? _demo;
+
+  /// 2026-11-25 시연 모드(서버 dev 프로필): 입력칸을 미리 채우고 '시연 결제'를 늘 보여 준다. 한 번만 묻고 기억
+  Future<bool> demoMode() async {
+    if (_demo != null) return _demo!;
+    try {
+      final json = await api.get('/api/config/demo', auth: false) as Map<String, dynamic>;
+      return _demo = json['easyFlow'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<List<Carrier>> carriers() async {
     final json = await api.get('/api/shipping/carriers', auth: false) as Map<String, dynamic>;
     return (json['carriers'] as List? ?? const [])

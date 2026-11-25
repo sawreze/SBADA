@@ -110,7 +110,7 @@ public class SecurityConfig {
                                     "/api/categories", "/api/feed", "/api/feed/**", "/api/me/items", "/api/me/likes",
                                     "/graphql").permitAll()
                             .requestMatchers(HttpMethod.GET, // ← 이 줄의 주소들은 GET 방식일 때만 공개
-                                    "/api/config/map", "/api/geo/reverse",
+                                    "/api/config/map", "/api/config/demo", "/api/geo/reverse",
                                     "/api/users/*/reviews", "/api/shipping/carriers").permitAll() // 2026-11-25 후기 · 택배사 목록
                             .requestMatchers("/api/**").authenticated() // 나머지 API 는 로그인(토큰) 필요
                             .anyRequest().denyAll();                    // 그 밖의 주소는 모두 거절

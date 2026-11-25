@@ -89,7 +89,11 @@ public class ShippingService {
         }
         String code = carrierCode == null ? "" : carrierCode.trim();
         String invoice = invoiceNo == null ? "" : invoiceNo.replaceAll("[^0-9A-Za-z]", "");
-        if (invoice.length() < 8 || invoice.length() > 20) {
+        boolean easy = tracking.isEasy() && TrackingService.TEST_CARRIER.equals(code);
+        if (easy && invoice.isEmpty()) {
+            invoice = demoInvoice();
+        }
+        if (!easy && (invoice.length() < 8 || invoice.length() > 20) || invoice.length() > 20) {
             throw new ApiException(400, "INVALID_INVOICE", "운송장 번호를 다시 입력해 주세요. (숫자 8~20자리)",
                     Map.of("invoiceNo", "운송장 번호를 다시 입력해 주세요."));
         }
@@ -118,8 +122,21 @@ public class ShippingService {
         notifications.notify(request.otherOf(userId), NotificationType.DELIVERY, "상대가 운송장을 입력했어요",
                 String.format("%s님이 보낸 물건: %s %s", me.getNickname(), carrierName, s.maskedInvoice()),
                 "EXCHANGE", request.getId());
+        // 2026-11-25 시연 모드: 상대가 아직 입력하지 않았으면 상대 운송장도 테스트 택배로 자동 입력 → 바로 배송이 끝까지 진행
+        if (easy && request.getShipments().size() < 2) {
+            AppUser other = users.findById(request.otherOf(userId)).orElseThrow();
+            Shipment auto = new Shipment(request, other);
+            auto.register(TrackingService.TEST_CARRIER, carrierName, demoInvoice(),
+                    tracking.track(TrackingService.TEST_CARRIER, "1", Instant.now()));
+            shipments.save(auto);
+            request.getShipments().add(auto);
+            exchangeService.postCard(request, ChatMessage.Type.SHIPPING, String.format("🚚 (시연) %s님 운송장도 자동으로 입력했어요 · %s %s",
+                    other.getNickname(), carrierName, auto.maskedInvoice()));
+        }
         if (request.getShipments().size() == 2) {
-            exchangeService.postSystem(request, "📮 두 분 모두 운송장을 입력했어요. 배송 현황이 바뀌면 채팅과 알림으로 알려 드릴게요.");
+            exchangeService.postSystem(request, easy
+                    ? "📮 두 분 모두 운송장을 입력했어요. (시연) 약 30초 동안 배송 단계가 올라가고 배송 완료 · 정산까지 이어져요."
+                    : "📮 두 분 모두 운송장을 입력했어요. 배송 현황이 바뀌면 채팅과 알림으로 알려 드릴게요.");
         }
         checkCompleted(request);
         exchangeService.publish(request);
@@ -238,8 +255,14 @@ public class ShippingService {
         return n;
     }
 
+    /** 시연용 운송장 번호(12자리) */
+    private static String demoInvoice() {
+        return String.valueOf(100_000_000_000L + java.util.concurrent.ThreadLocalRandom.current().nextLong(900_000_000_000L));
+    }
+
     private boolean isDue(Shipment s) {
-        Duration every = TrackingService.TEST_CARRIER.equals(s.getCarrierCode()) ? Duration.ofSeconds(50) : realRecheck;
+        Duration test = tracking.isEasy() ? Duration.ofSeconds(5) : Duration.ofSeconds(50);
+        Duration every = TrackingService.TEST_CARRIER.equals(s.getCarrierCode()) ? test : realRecheck;
         return s.getCheckedAt().isBefore(Instant.now().minus(every));
     }
 
@@ -272,11 +295,24 @@ public class ShippingService {
                 || !request.getShipments().stream().allMatch(Shipment::isDelivered)) {
             return;
         }
+        boolean released = false;
         if (request.payment() == PaymentStatus.PAID_HELD) {
             payments.release(request.getId()); // 결제 서버가 꺼져 있으면 예외 → 다음 조회 때 다시
             exchangeService.markPayment(request, PaymentStatus.RELEASED);
+            released = true;
         }
         request.markCompleted();
+        if (released) {
+            // 2026-11-25: 보관하던 추가요금을 받는 사람에게 지급했다는 안내(채팅 · 알림)
+            Long payeeId = request.payeeId();
+            AppUser payee = payeeId != null && payeeId == request.getRequester().getId() ? request.getRequester()
+                    : request.getTargetOwner();
+            String money = String.format("%,d원", request.getExtraAmount());
+            exchangeService.postSystem(request, String.format("💸 보관 중이던 추가요금 %s이 %s님 지갑으로 지급되었어요.",
+                    money, payee.getNickname()));
+            notifications.notify(payee.getId(), NotificationType.DELIVERY, "추가요금이 지급되었어요",
+                    String.format("%s이 지갑으로 들어왔어요.", money), "EXCHANGE", request.getId());
+        }
         exchangeService.postCard(request, ChatMessage.Type.SHIPPING,
                 "✅ 두 물건 모두 도착했어요! 거래가 완료되었어요. 서로에게 거래 후기를 남겨 주세요.");
         for (long uid : List.of(request.getRequester().getId(), request.getTargetOwner().getId())) {

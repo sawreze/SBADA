@@ -44,13 +44,17 @@ public class TrackingService {
 
     private final String key;
     private final boolean demoCarrier;
+    /** 2026-11-25 시연 모드(dev): 테스트 택배는 아무 번호나 받고, 8초마다 한 단계 → 약 30초 뒤 배송 완료 */
+    private final boolean easy;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private volatile List<Carrier> cachedCarriers;
 
     public TrackingService(@Value("${sbada.tracking.sweettracker-key:}") String key,
-                           @Value("${sbada.tracking.demo-carrier:true}") boolean demoCarrier) {
+                           @Value("${sbada.tracking.demo-carrier:true}") boolean demoCarrier,
+                           @Value("${sbada.demo.easy-flow:false}") boolean easy) {
         this.key = key == null ? "" : key.trim();
         this.demoCarrier = demoCarrier;
+        this.easy = easy;
     }
 
     public boolean hasRealApi() {
@@ -81,7 +85,7 @@ public class TrackingService {
             if (!demoCarrier) {
                 throw ApiException.badRequest("UNKNOWN_CARRIER", "택배사를 다시 골라 주세요.");
             }
-            return demo(invoice, since);
+            return demo(invoice, since, easy);
         }
         if (!hasRealApi()) {
             throw new ApiException(503, "TRACKING_UNAVAILABLE",
@@ -92,12 +96,21 @@ public class TrackingService {
 
     // ───────────── 시연용 테스트 택배 ─────────────
 
+    public boolean isEasy() {
+        return easy;
+    }
+
     static TrackResult demo(String invoice, Instant since) {
-        if (invoice == null || !invoice.matches("\\d{10,14}")) {
+        return demo(invoice, since, false);
+    }
+
+    static TrackResult demo(String invoice, Instant since, boolean easy) {
+        if (invoice == null || (easy ? invoice.isBlank() : !invoice.matches("\\d{10,14}"))) {
             return TrackResult.notFound("운송장 번호를 다시 입력해 주세요. (테스트 택배는 숫자 10~14자리)");
         }
-        long minutes = since == null ? 0 : Math.max(0, Duration.between(since, Instant.now()).toMinutes());
-        int level = (int) Math.min(6, 2 + minutes); // 등록 직후 2(집화) → 1분마다 한 단계 → 4분 뒤 6(완료)
+        long passed = since == null ? 0 : Math.max(0, Duration.between(since, Instant.now()).toSeconds());
+        // 등록 직후 2(집화) → 한 단계씩 → 6(완료). 보통 1분마다(약 4분), 시연 모드는 8초마다(약 30초)
+        int level = (int) Math.min(6, 2 + (easy ? passed / 8 : passed / 60));
         String[] where = {"", "", "보내는 곳 편의점", "서울 허브", "동네 대리점", "배달 기사", "받는 곳"};
         return new TrackResult(true, level, level >= 6, TrackResult.levelLabel(level), where[level],
                 java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Seoul")).withNano(0).toString().replace('T', ' '), null);
