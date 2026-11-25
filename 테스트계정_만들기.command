@@ -8,8 +8,14 @@
 #  확인 순서: docs/handoff/09_직접_확인_체크리스트.md     기록: logs/test-accounts.log
 ROOT="$(cd "$(dirname "$0")" && pwd)"; source "$ROOT/scripts/_common.sh"
 "$ROOT/scripts/stop-stale.sh" >/dev/null 2>&1
+# 2026-11-25: 옛 코드라 꺼졌거나(stop-stale) 꺼져 있으면 여기서 메인 서버를 켠다(전에는 '먼저 실행해 주세요' 하고 끝나서 서버가 다 꺼진 채로 남았음)
 if ! curl -s -o /dev/null -m 2 http://127.0.0.1:8097/api/health; then
-  echo "메인 서버가 꺼져 있어요 → 스바다_실행.command 를 먼저 실행해 주세요"; read -r -p "Enter 를 누르면 닫혀요"; exit 1
+  echo "메인 서버 켜는 중(처음엔 1~2분) → logs/server.log"
+  ( cd "$ROOT/sbada-server" && nohup ./gradlew bootRun --args='--spring.profiles.active=dev --spring.h2.console.enabled=false' > "$ROOT/logs/server.log" 2>&1 & )
+  for i in $(seq 1 90); do curl -s -o /dev/null -m 2 http://127.0.0.1:8097/api/health && break; sleep 2; done
+  if ! curl -s -o /dev/null -m 2 http://127.0.0.1:8097/api/health; then
+    echo "메인 서버가 안 켜져요 → logs/server.log 를 확인해 주세요"; read -r -p "Enter 를 누르면 닫혀요"; exit 1
+  fi
 fi
 "$ROOT/scripts/start-msa-bg.sh" --wait
 python3 "$ROOT/scripts/make_test_accounts.py" "$@" 2>&1 | tee "$ROOT/logs/test-accounts.log"
