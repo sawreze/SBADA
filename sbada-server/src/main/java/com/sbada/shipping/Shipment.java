@@ -120,6 +120,12 @@ public class Shipment {
         return changed;
     }
 
+    /** 시연 도구(dev 전용): 등록 시각을 앞당겨 테스트 택배 단계가 바로 끝까지 가게 한다 */
+    public void rewindForDemo(java.time.Duration d) {
+        this.verifiedAt = verifiedAt.minus(d);
+        this.checkedAt = checkedAt.minus(d);
+    }
+
     public boolean isDelivered() {
         return status == Status.DELIVERED;
     }

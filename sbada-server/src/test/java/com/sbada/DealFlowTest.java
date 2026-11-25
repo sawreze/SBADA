@@ -37,7 +37,8 @@ import com.sbada.exchange.ShippingService;
         "sbada.jwt.secret-file=./build/test-data/.jwt-secret",
         "sbada.upload.dir=./build/test-data/deal-flow-uploads",
         "sbada.internal.token-file=./build/test-data/.internal-token",
-        "sbada.tracking.sweettracker-key="
+        "sbada.tracking.sweettracker-key=",
+        "sbada.demo.tools-enabled=true"
 })
 @AutoConfigureMockMvc
 class DealFlowTest {
@@ -225,5 +226,58 @@ class DealFlowTest {
         assertThat(FakeServices.ESCROW_CALLS.stream().anyMatch(c -> c.startsWith("refund " + d.exchangeId()))).isTrue();
         assertThat(FakeServices.status(d.offered())).isEqualTo("AVAILABLE");
         assertThat(FakeServices.status(d.target())).isEqualTo("AVAILABLE");
+    }
+
+    /** 2026-11-25 시연 도구(dev 전용): 배송 완료 · 기간 만료 건너뛰기, 시연 계정 정리 */
+    @Test
+    void demoToolsSkipDeliveryAndExpiryAndRetireDemoAccount() throws Exception {
+        Deal d = newDeal("dfe", 80_000, 50_000);
+        postJson(d.owner(), "/api/exchanges/" + d.exchangeId() + "/accept", null).andExpect(status().isOk());
+        // 운송장 두 장이 없으면 배송 완료로 못 건너뛴다
+        postJson(d.owner(), "/api/demo/exchanges/" + d.exchangeId() + "/deliver-now", null)
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NEED_TWO_SHIPMENTS"));
+        postJson(d.owner(), "/api/exchanges/" + d.exchangeId() + "/shipment", "{\"carrierCode\":\"TEST\",\"invoiceNo\":\"3131313131\"}").andExpect(status().isOk());
+        postJson(d.requester(), "/api/exchanges/" + d.exchangeId() + "/shipment", "{\"carrierCode\":\"TEST\",\"invoiceNo\":\"4141414141\"}").andExpect(status().isOk());
+        // 남은 만료시킬 수 없다(둘 다 입력함)
+        postJson(d.owner(), "/api/demo/exchanges/" + d.exchangeId() + "/expire-now", null)
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BOTH_SHIPPED"));
+        postJson(d.owner(), "/api/demo/exchanges/" + d.exchangeId() + "/deliver-now", null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.dealStage").value("COMPLETED"))
+                .andExpect(jsonPath("$.shipments[0].status").value("DELIVERED"));
+
+        Deal e = newDeal("dff", 80_000, 50_000);
+        postJson(e.owner(), "/api/exchanges/" + e.exchangeId() + "/accept", null).andExpect(status().isOk());
+        TestSupport.Account stranger = TestSupport.newAccount(mvc, "dfg");
+        postJson(stranger, "/api/demo/exchanges/" + e.exchangeId() + "/expire-now", null).andExpect(status().isForbidden());
+        postJson(e.requester(), "/api/demo/exchanges/" + e.exchangeId() + "/expire-now", null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELED"))
+                .andExpect(jsonPath("$.dealStage").value("EXPIRED"));
+        assertThat(FakeServices.status(e.target())).isEqualTo("AVAILABLE");
+
+        // 시연 계정이 아니면 정리 불가, demo@sbada.test 는 이메일을 비우고 같은 이메일로 다시 가입할 수 있다
+        postJson(stranger, "/api/demo/retire-me", null).andExpect(status().isForbidden());
+        String signup = "{\"email\":\"demo@sbada.test\",\"password\":\"study-1234\",\"nickname\":\"시연\",\"region\":\"서울\"}";
+        mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON).content(signup)).andExpect(status().isCreated());
+        String login = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"demo@sbada.test\",\"password\":\"study-1234\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        String token = JsonPath.read(login, "$.accessToken");
+        mvc.perform(post("/api/demo/retire-me").header("Authorization", "Bearer " + token)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.retired").value(true));
+        mvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON).content(signup)).andExpect(status().isCreated());
+    }
+
+    /** 결제가 확인됐는데 그 사이 물건이 내려간 경우: 교환 취소 + 환불, 이벤트는 정상 처리(같은 이벤트가 계속 실패하며 막히지 않음) */
+    @Test
+    void paymentAfterItemGoneCancelsAndRefundsInsteadOfFailing() throws Exception {
+        Deal d = newDeal("dfh", 90_000, 30_000);
+        postJson(d.owner(), "/api/exchanges/" + d.exchangeId() + "/extra-request", "{\"amount\":10000}").andExpect(status().isOk());
+        postJson(d.requester(), "/api/exchanges/" + d.exchangeId() + "/extra-request/accept", null).andExpect(status().isOk());
+        FakeServices.setStatus(d.target(), "HIDDEN");
+        exchanges.applyPaymentEvent(d.exchangeId(), "ESCROW_HELD");
+        view(d.requester(), d.exchangeId()).andExpect(jsonPath("$.status").value("CANCELED"))
+                .andExpect(jsonPath("$.paymentStatus").value("REFUND_PENDING"));
+        assertThat(FakeServices.ESCROW_CALLS.stream().anyMatch(c -> c.startsWith("refund " + d.exchangeId()))).isTrue();
+        assertThat(FakeServices.status(d.offered())).isEqualTo("AVAILABLE");
     }
 }

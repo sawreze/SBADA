@@ -192,11 +192,16 @@ public class ExchangeService {
      */
     private void complete(ExchangeRequest request, boolean instant) {
         long receiverId = request.getTargetOwner().getId();
-        request.accept();          // REQUESTED 가 아니면 409
+        if (request.getStatus() != ExchangeStatus.REQUESTED) {
+            throw ApiException.conflict("INVALID_STATUS", "이미 처리된 요청입니다(현재 상태: " + request.getStatus() + ").");
+        }
         // 2026-11-25 MSA 2단계: 두 물건을 거래 완료로 바꾸는 일은 물품 서버가 한 트랜잭션에서(배달부 gRPC CompleteTrade).
         //  하나라도 이미 교환 · 내려감이면 409 → 이 트랜잭션(수락)도 취소된다.
         //  (gRPC 성공 뒤 이 트랜잭션이 실패하는 드문 경우는 물건만 TRADED 로 남는다 — 사가 보상은 다음 단계 과제)
+        //  2026-11-25: 물품 서버를 먼저 부르고 그다음 상태를 바꾼다 → 실패하면 교환은 그대로 REQUESTED 라
+        //  결제 확인 쪽(applyPaymentEvent)이 '취소 + 환불'로 정리할 수 있다(전에는 ACCEPTED 로 바뀐 뒤라 취소가 409 → 이벤트가 계속 재시도되며 막힘)
         items.completeTrade(request.getId(), request.getOfferedItemId(), request.getTargetItemId());
+        request.accept();
 
         // 두 물건이 걸린 '다른' 대기 요청은 더 이상 이룰 수 없으므로 자동 취소 + 그 요청자에게 알림
         List<ExchangeRequest> others = exchanges.findInvolving(
@@ -536,6 +541,9 @@ public class ExchangeService {
                         postSystem(request, "💳 결제가 확인되어 교환을 진행해요.");
                         complete(request, false);
                     } catch (ApiException e) {
+                        if (e.getStatus() >= 500) {
+                            throw e; // 물품 서버가 잠깐 꺼진 것 → 취소하지 않고, 이벤트를 다시 받을 때 다시 시도
+                        }
                         // 그 사이 물건이 내려가거나 다른 교환으로 거래 완료된 경우: 교환 취소 + 전액 환불
                         request.cancel("물건을 교환할 수 없게 되어 취소되었어요: " + e.getMessage());
                         postSystem(request, "↩️ 물건을 교환할 수 없게 되어 거래가 취소되었어요. 결제한 금액은 환불돼요.");

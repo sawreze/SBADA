@@ -313,6 +313,11 @@ public class ExchangeRequest {
         this.shipDeadline = Instant.now().plus(window);
     }
 
+    /** 시연 도구(dev 전용): 운송장 입력 마감을 지금 지난 것으로 */
+    public void expireDeadlineForDemo() {
+        this.shipDeadline = Instant.now().minusSeconds(1);
+    }
+
     /** 두 물건 모두 도착 */
     public void markCompleted() {
         this.dealStage = DealStage.COMPLETED;

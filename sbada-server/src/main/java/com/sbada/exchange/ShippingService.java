@@ -146,6 +146,52 @@ public class ShippingService {
         return exchangeService.view(request, userId);
     }
 
+    // ───── 시연 도구(dev 프로필 전용, DemoToolsController) — 발표 때 기다리지 않고 상태를 보여 주려고 ─────
+
+    /** 테스트 택배 운송장 두 장을 지금 '배송 완료'로 → 거래 완료(보관 돈 정산)까지 */
+    @Transactional
+    public ExchangeDtos.ExchangeView demoDeliverNow(long exchangeId, long userId) {
+        ExchangeRequest request = exchangeService.require(exchangeId);
+        if (!request.isParticipant(userId)) {
+            throw ApiException.forbidden("NOT_PARTICIPANT", "교환 당사자만 쓸 수 있어요.");
+        }
+        if (request.getDealStage() != DealStage.SHIPPING || request.getShipments().size() < 2) {
+            throw ApiException.conflict("NEED_TWO_SHIPMENTS", "두 분 모두 운송장을 입력한 배송 중 교환에서만 쓸 수 있어요.");
+        }
+        for (Shipment s : request.getShipments()) {
+            if (!TrackingService.TEST_CARRIER.equals(s.getCarrierCode())) {
+                throw ApiException.conflict("NOT_TEST_CARRIER", "시연용 테스트 택배 운송장만 건너뛸 수 있어요.");
+            }
+        }
+        for (Shipment s : request.getShipments()) {
+            if (!s.isDelivered()) {
+                s.rewindForDemo(Duration.ofMinutes(10));
+                poll(request, s);
+            }
+        }
+        checkCompleted(request);
+        exchangeService.publish(request);
+        return exchangeService.view(request, userId);
+    }
+
+    /** 운송장 입력 마감(7일)을 지금 지난 것으로 → '기간이 만료되었습니다' · 취소 · 환불 */
+    @Transactional
+    public ExchangeDtos.ExchangeView demoExpireNow(long exchangeId, long userId) {
+        ExchangeRequest request = exchangeService.require(exchangeId);
+        if (!request.isParticipant(userId)) {
+            throw ApiException.forbidden("NOT_PARTICIPANT", "교환 당사자만 쓸 수 있어요.");
+        }
+        if (request.getDealStage() != DealStage.SHIPPING) {
+            throw ApiException.conflict("NOT_SHIPPING", "배송 단계의 교환만 만료시킬 수 있어요.");
+        }
+        if (request.getShipments().size() >= 2) {
+            throw ApiException.conflict("BOTH_SHIPPED", "두 분 모두 운송장을 입력해서 만료되지 않아요.");
+        }
+        request.expireDeadlineForDemo();
+        expire(request);
+        return exchangeService.view(request, userId);
+    }
+
     /** 1분마다: 7일 만료 검사 + 묻을 때가 된 운송장 조회. 교환 하나씩 따로 트랜잭션(하나가 실패해도 나머지는 계속) */
     @Scheduled(initialDelayString = "${sbada.shipping.initial-delay-ms:30000}", fixedDelayString = "${sbada.shipping.poll-ms:60000}")
     public void scheduled() {
