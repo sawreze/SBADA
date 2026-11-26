@@ -45,3 +45,6 @@ _to_delete/
 
 # 시연용 사진(개인 사진일 수 있음) — 올리지 않는다
 demo_photos/
+
+# 맥 Finder 가 만드는 파일
+.DS_Store
