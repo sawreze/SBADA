@@ -42,7 +42,8 @@ if command -v gh >/dev/null 2>&1; then
   gh auth status >/dev/null 2>&1 || { say "깃허브 로그인이 필요해요 — 브라우저가 열리면 로그인해 주세요"; gh auth login -h github.com -p https -w; }
   gh auth setup-git >/dev/null 2>&1
 fi
-if ! git push -q --dry-run origin HEAD:main 2>/dev/null; then
+# (main 에 바로 dry-run 하면 깃허브가 앞서 있을 때 실패하므로, 없는 가지 이름으로 권한만 확인)
+if ! git push -q --dry-run origin HEAD:refs/heads/_sbada_auth_check 2>/dev/null; then
   say "깃허브에 올릴 권한이 아직 없어요."
   say "  → 터미널에서 'brew install gh' 후 'gh auth login' 으로 로그인하고 이 파일을 다시 실행해 주세요."
   read -r -p "Enter 를 누르면 닫혀요"; exit 1
