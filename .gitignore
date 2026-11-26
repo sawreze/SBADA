@@ -48,3 +48,7 @@ demo_photos/
 
 # 맥 Finder 가 만드는 파일
 .DS_Store
+
+# 맥에서 잠깐 만든 시험 · 백업 폴더
+_mvtest*/
+_백업_*/

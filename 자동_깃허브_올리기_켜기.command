@@ -23,16 +23,19 @@ if [ ! -d .git ]; then
   fi
   git reset -q origin/main          # 파일은 건드리지 않고 기록만 깃허브와 맞춘다
   git branch -q --set-upstream-to=origin/main main
-  # 줄바꿈(윈도우 CRLF) · 끝 공백만 다른 파일은 깃허브 것으로 맞춘다(내용이 같으니 잃는 것 없음). 없는 파일도 되살린다.
-  git ls-files -d | while IFS= read -r f; do git checkout -q -- "$f"; done
-  git diff --name-only | while IFS= read -r f; do
-    git diff --quiet --ignore-cr-at-eol --ignore-space-at-eol -- "$f" && git checkout -q -- "$f"
-  done
-  say "연결 완료. 깃허브와 다른 파일:"; git status --short | grep -v '^ D' | head -20
+  say "연결 완료."
 else
   git remote get-url origin >/dev/null 2>&1 || git remote add origin "$REPO"
   git fetch -q origin main
 fi
+git config core.quotepath off      # 한글 파일 이름을 그대로
+git config core.fileMode false     # 실행 권한(+x)만 다른 건 바뀐 걸로 보지 않음
+# 줄바꿈(윈도우 CRLF) · 끝 공백만 다른 파일은 깃허브 것으로 맞춘다(내용이 같으니 잃는 것 없음). 없는 파일도 되살린다.
+git ls-files -d -z | while IFS= read -r -d '' f; do git checkout -q -- "$f"; done
+git diff --name-only -z | while IFS= read -r -d '' f; do
+  git diff --quiet --ignore-cr-at-eol --ignore-space-at-eol -- "$f" && git checkout -q -- "$f"
+done
+say "깃허브와 다른 파일(다음 자동 올리기에 올라감):"; git status --short | grep -v '^ D' | head -20
 
 # 2) 깃허브 로그인(푸시 권한) 확인
 if command -v gh >/dev/null 2>&1; then

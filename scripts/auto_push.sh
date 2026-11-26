@@ -26,7 +26,7 @@ trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 # 오늘 올린 횟수(logs/.auto-push-count: "날짜 횟수")
 TODAY="$(date +%Y-%m-%d)"; COUNT_FILE="$ROOT/logs/.auto-push-count"
-read -r CDAY CNT < "$COUNT_FILE" 2>/dev/null
+CDAY=""; CNT=0; [ -f "$COUNT_FILE" ] && read -r CDAY CNT < "$COUNT_FILE"
 [ "$CDAY" = "$TODAY" ] || CNT=0
 if [ "${CNT:-0}" -ge "$MAX_PER_DAY" ]; then exit 0; fi
 
@@ -44,13 +44,18 @@ else
 # 비밀값 검사(키 값은 로그에 남기지 않고 파일 이름만)
 PATTERN='(AIza[0-9A-Za-z_-]{30,}|sk_(live|test)_[0-9A-Za-z]{16,}|(live|test)_(sk|ck|gsk)_[0-9A-Za-z]{16,}|ghp_[0-9A-Za-z]{30,}|github_pat_[0-9A-Za-z_]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|(api[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?token)[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9_\-]{20,})'
 # 새로 더해진 줄만 본다(파일 이름은 diff 의 +++ 줄에서)
-HIT="$(git diff --cached -U0 --no-color | while IFS= read -r line; do
-  case "$line" in
-    '+++ b/'*) f="${line#+++ b/}" ;;
-    '+++'*) ;;
-    '+'*) printf '%s\n' "$line" | grep -iEq "$PATTERN" && echo "$f" ;;
-  esac
-done | sort -u)"
+# (맥 기본 bash 3.2 는 $( ) 안의 case 를 못 읽어서 함수로 뺐다)
+scan_added(){
+  local line f=""
+  while IFS= read -r line; do
+    case "$line" in
+      '+++ b/'*) f="${line#+++ b/}" ;;
+      '+++'*) ;;
+      '+'*) printf '%s\n' "$line" | grep -iEq "$PATTERN" && echo "$f" ;;
+    esac
+  done
+}
+HIT="$(git -c core.quotepath=off diff --cached -U0 --no-color | scan_added | sort -u)"
 if [ -n "$HIT" ]; then
   git reset -q
   say "⚠️ 비밀값처럼 보이는 내용이 있어 올리지 않았어요: $(echo "$HIT" | tr '\n' ' ')"
@@ -58,8 +63,8 @@ if [ -n "$HIT" ]; then
   exit 1
 fi
 
-FILES="$(git diff --cached --name-only | wc -l | tr -d ' ')"
-FIRST="$(git diff --cached --name-only | head -3 | tr '\n' ' ')"
+FILES="$(git -c core.quotepath=off diff --cached --name-only | wc -l | tr -d ' ')"
+FIRST="$(git -c core.quotepath=off diff --cached --name-only | head -3 | tr '\n' ' ')"
 NAME="$(git log -1 --format='%an' 2>/dev/null)"; EMAIL="$(git log -1 --format='%ae' 2>/dev/null)"
 git -c user.name="${NAME:-sawreze}" -c user.email="${EMAIL:-sawreze@users.noreply.github.com}" \
   commit -q -m "자동 저장: 맥에서 바뀐 파일 ${FILES}개 ($(date '+%Y-%m-%d %H:%M'))" -m "$FIRST" || { say "커밋 실패"; exit 1; }
