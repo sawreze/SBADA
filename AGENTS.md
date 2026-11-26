@@ -1,6 +1,6 @@
 # AGENTS.md — 스바다(SBADA) 작업 규칙 (Codex · 다른 AI 에이전트용)
 
-이 파일은 Codex 가 이 저장소에서 일할 때 자동으로 읽는 지침이다. 자세한 인수인계는 `docs/handoff/` 를 먼저 읽는다.
+이 파일은 Codex 가 이 저장소에서 일할 때 자동으로 읽는 지침이다. 자세한 인수인계는 `docs/handoff/` 를 먼저 읽는다. 날마다 한 일은 `docs/작업일지.md`.
 
 ## 0. 꼭 지킬 것
 - **답변 · 커밋 메시지 · 코드 주석은 한국어**로 쓴다(사용자가 한국어 사용).
@@ -9,7 +9,7 @@
     `sbada_app/ios/Flutter/Secrets.xcconfig`, `*.p8`, `*/data/**`(JWT 키 `.jwt-secret`, 내부 토큰 `.internal-token`, 계좌 암호화 RSA 키 `sbada-payment/data/keys/`).
   - 커밋 전에 `git diff --cached` 에서 키 모양 문자열을 검사한다. 키 값을 출력하거나 로그에 남기지 않는다.
 - **작업이 끝나면 묻지 않고 GitHub(`sawreze/SBADA` main)에 커밋 · 푸시한다**(2026-11-25 사용자 요청). 푸시 전 비밀값 검사는 항상 한다.
-  맥 폴더(`~/dev/SBADA`, git 아님)에도 같은 파일을 넣어 둔다.
+  맥 폴더(`~/dev/SBADA`)에도 같은 파일을 넣어 둔다.
   **맥 `~/dev/SBADA` 는 git 저장소이며 5분마다 자동으로 커밋 · 푸시된다(하루 최대 20번, `scripts/auto_push.sh` · launchd `com.sbada.autopush`,
   켜기/끄기 `자동_깃허브_올리기_켜기/끄기.command`).** 그래서 다른 곳에서 작업할 때는 시작 전에 `git pull` 로 맥에서 올라간 커밋을 먼저 받는다.
   구글드라이브 업로드 사본(`스바다_구글드라이브_업로드/SBADA`)의 `*.command` 는 `~/dev/SBADA` 것을 실행하는 래퍼다 — 덮어쓰지 않는다(서버 · 키 · DB 는 맥 개발 폴더 하나만).
