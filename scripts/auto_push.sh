@@ -28,6 +28,11 @@ trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 TODAY="$(date +%Y-%m-%d)"; COUNT_FILE="$ROOT/logs/.auto-push-count"
 CDAY=""; CNT=0; [ -f "$COUNT_FILE" ] && read -r CDAY CNT < "$COUNT_FILE"
 [ "$CDAY" = "$TODAY" ] || CNT=0
+# 그날만 횟수를 바꾸고 싶으면 logs/.auto-push-today-max 에 "날짜 횟수"(예: 2026-11-27 10). 다른 날엔 무시된다.
+if [ -f "$ROOT/logs/.auto-push-today-max" ]; then
+  read -r MDAY MMAX < "$ROOT/logs/.auto-push-today-max"
+  [ "$MDAY" = "$TODAY" ] && [ -n "$MMAX" ] && MAX_PER_DAY="$MMAX"
+fi
 if [ "${CNT:-0}" -ge "$MAX_PER_DAY" ]; then exit 0; fi
 
 [ -d .git ] || { say "git 저장소가 아니에요 → 자동_깃허브_올리기_켜기.command 를 먼저 실행해 주세요"; exit 1; }
