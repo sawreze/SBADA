@@ -34,6 +34,18 @@ if [ "${CNT:-0}" -ge "$MAX_PER_DAY" ]; then exit 0; fi
 # 이전에 멈춘 rebase 가 있으면 정리
 [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ] && git rebase --abort >/dev/null 2>&1
 
+# 작업일지: 저녁 8시가 넘었는데 오늘 깃허브에 올라간 커밋이 하나도 없으면 docs/작업일지.md 에 한 줄 남긴다
+# (2026-11-26 사용자 요청: 작업이 없는 날에도 잔디가 비지 않게). 하루에 한 번만.
+JOURNAL="$ROOT/docs/작업일지.md"
+if [ "$(date +%H)" -ge 20 ] && [ -f "$JOURNAL" ] && ! grep -q "^## $TODAY" "$JOURNAL"; then
+  git fetch -q origin main 2>/dev/null
+  if [ "$(git log origin/main --since="$TODAY 00:00" --oneline 2>/dev/null | wc -l | tr -d ' ')" = "0" ]; then
+    LAST="$(git log origin/main -1 --format='%s' 2>/dev/null | cut -c1-60)"
+    printf '\n## %s\n- 코드 변경 없음 · 자동 점검(마지막 작업: %s)\n' "$TODAY" "$LAST" >> "$JOURNAL"
+    say "작업일지에 오늘 한 줄을 남겼어요"
+  fi
+fi
+
 git add --ignore-removal . >/dev/null 2>&1
 AHEAD="$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)"
 if git diff --cached --quiet; then
