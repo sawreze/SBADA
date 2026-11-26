@@ -1,8 +1,8 @@
 #!/bin/bash
-# ===== 자동 깃허브 올리기 켜기: 5분마다 맥 ~/dev/SBADA → github.com/sawreze/SBADA (2026-11-26 사용자 요청) =====
+# ===== 자동 깃허브 올리기 켜기: 1분마다 맥 ~/dev/SBADA → github.com/sawreze/SBADA (2026-11-26 사용자 요청) =====
 #  1) 이 폴더가 git 저장소가 아니면 깃허브 레포와 연결한다(파일은 그대로 두고 기록만 맞춘다).
 #  2) 깃허브 로그인을 확인하고 한 번 바로 올려 본다.
-#  3) launchd 에 등록해 맥이 켜져 있는 동안 5분마다 scripts/auto_push.sh 를 실행한다(재부팅 후에도 계속).
+#  3) launchd 에 등록해 맥이 켜져 있는 동안 1분마다 scripts/auto_push.sh 를 실행한다(재부팅 후에도 계속).
 #     단, 실제로 올리는 건 하루 최대 20번(scripts/auto_push.sh 의 MAX_PER_DAY).
 #  끄기: 자동_깃허브_올리기_끄기.command · 기록: logs/auto-push.log
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -53,7 +53,7 @@ fi
 chmod +x scripts/auto_push.sh
 bash scripts/auto_push.sh; tail -n 3 logs/auto-push.log 2>/dev/null
 
-# 4) 5분마다 실행 등록(launchd)
+# 4) 1분마다 실행 등록(launchd)
 mkdir -p "$HOME/Library/LaunchAgents"
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -63,7 +63,7 @@ cat > "$PLIST" <<EOF
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key>
   <array><string>/bin/bash</string><string>$ROOT/scripts/auto_push.sh</string></array>
-  <key>StartInterval</key><integer>300</integer>
+  <key>StartInterval</key><integer>60</integer>
   <key>RunAtLoad</key><true/>
   <key>StandardOutPath</key><string>$ROOT/logs/auto-push.launchd.log</string>
   <key>StandardErrorPath</key><string>$ROOT/logs/auto-push.launchd.log</string>
@@ -72,7 +72,7 @@ cat > "$PLIST" <<EOF
 EOF
 launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1
 if launchctl bootstrap "gui/$(id -u)" "$PLIST"; then
-  say "완료! 이제 5분마다 확인해서 바뀐 파일을 깃허브에 자동으로 올려요(하루 최대 20번)."
+  say "완료! 이제 1분마다 확인해서 바뀐 파일을 깃허브에 자동으로 올려요(하루 최대 20번)."
   say "  기록: logs/auto-push.log · 끄기: 자동_깃허브_올리기_끄기.command"
 else
   say "등록 실패 — 위 메시지를 확인해 주세요"

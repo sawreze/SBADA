@@ -1,6 +1,6 @@
 #!/bin/bash
-# ===== 자동 깃허브 올리기: 맥 ~/dev/SBADA 의 바뀐 파일을 5분마다 커밋 · 푸시 (2026-11-26 사용자 요청) =====
-#  launchd(자동_깃허브_올리기_켜기.command 가 등록)가 5분마다 실행한다. 손으로 돌려도 된다.
+# ===== 자동 깃허브 올리기: 맥 ~/dev/SBADA 의 바뀐 파일을 1분마다 커밋 · 푸시 (2026-11-26 사용자 요청) =====
+#  launchd(자동_깃허브_올리기_켜기.command 가 등록)가 1분마다 실행한다. 손으로 돌려도 된다.
 #  안전장치
 #   - 비밀값 파일은 .gitignore 로 빠지고, 올리기 직전 바뀐 내용에서 키 모양 문자열을 한 번 더 찾는다 → 있으면 올리지 않는다.
 #   - 새 파일 · 바뀐 파일만 올린다(지워진 파일은 올리지 않음: 맥 폴더에 없는 파일이 레포에서 사라지지 않게).
@@ -34,16 +34,12 @@ if [ "${CNT:-0}" -ge "$MAX_PER_DAY" ]; then exit 0; fi
 # 이전에 멈춘 rebase 가 있으면 정리
 [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ] && git rebase --abort >/dev/null 2>&1
 
-# 작업일지: 저녁 8시가 넘었는데 오늘 깃허브에 올라간 커밋이 하나도 없으면 docs/작업일지.md 에 한 줄 남긴다
-# (2026-11-26 사용자 요청: 작업이 없는 날에도 잔디가 비지 않게). 하루에 한 번만.
+# 작업일지(2026-11-26 사용자 요청: 잔디 채우기): 바뀐 파일이 없어도 하루 MAX_PER_DAY 번까지
+# docs/작업일지.md 오늘 칸에 시각 한 줄을 남겨 매번 커밋이 생기게 한다.
 JOURNAL="$ROOT/docs/작업일지.md"
-if [ "$(date +%H)" -ge 20 ] && [ -f "$JOURNAL" ] && ! grep -q "^## $TODAY" "$JOURNAL"; then
-  git fetch -q origin main 2>/dev/null
-  if [ "$(git log origin/main --since="$TODAY 00:00" --oneline 2>/dev/null | wc -l | tr -d ' ')" = "0" ]; then
-    LAST="$(git log origin/main -1 --format='%s' 2>/dev/null | cut -c1-60)"
-    printf '\n## %s\n- 코드 변경 없음 · 자동 점검(마지막 작업: %s)\n' "$TODAY" "$LAST" >> "$JOURNAL"
-    say "작업일지에 오늘 한 줄을 남겼어요"
-  fi
+if [ -f "$JOURNAL" ] && git diff --quiet && [ -z "$(git ls-files -o --exclude-standard | head -1)" ]; then
+  grep -q "^## $TODAY" "$JOURNAL" || printf '\n## %s\n' "$TODAY" >> "$JOURNAL"
+  printf -- '- %s 자동 점검 (%s/%s)\n' "$(date +%H:%M)" "$(( ${CNT:-0} + 1 ))" "$MAX_PER_DAY" >> "$JOURNAL"
 fi
 
 git add --ignore-removal . >/dev/null 2>&1
