@@ -75,6 +75,8 @@ if ! git pull -q --rebase --autostash origin main >> "$LOG" 2>&1; then
   say "⚠️ 깃허브 최신 내용과 겹치는 수정이 있어 합치지 못했어요(커밋은 맥에 남아 있어요). 다음 차례에 다시 시도해요"
   exit 1
 fi
+# 합치고 보니 깃허브와 같으면(이미 올라간 내용) 올리지 않고 횟수도 쓰지 않는다
+if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main 2>/dev/null)" ]; then exit 0; fi
 if git push -q origin HEAD:main >> "$LOG" 2>&1; then
   CNT=$(( ${CNT:-0} + 1 )); echo "$TODAY $CNT" > "$COUNT_FILE"
   say "올림(오늘 ${CNT}/${MAX_PER_DAY}번째): ${FILES}개 파일 · $FIRST"
